@@ -1,0 +1,11 @@
+node_modules/
+dist/
+release/
+*.js.map
+*.d.ts
+.env
+.env.*
+*.env
+.vscode/
+.idea/
+*.local

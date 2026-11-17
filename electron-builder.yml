@@ -1,0 +1,36 @@
+appId: com.netflo.app
+productName: NetFlo
+copyright: "Copyright © 2026 NetFlo Contributors"
+
+directories:
+  output: release
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icon.ico
+  requestedExecutionLevel: requireAdministrator
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  installerHeaderIcon: resources/icon.ico
+
+asarUnpack:
+  - "resources/wintun/**"
+
+extraResources:
+  - from: resources/wintun
+    to: wintun
+    filter:
+      - "**/*.dll"
+
+publish:
+  provider: github
+  owner: VHARD6
+  repo: NetFlo
+  releaseType: draft
