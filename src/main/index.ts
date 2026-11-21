@@ -101,6 +101,16 @@ function createWindow(): void {
   }
 
   const htmlPath = path.join(__dirname, '../renderer/index.html');
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('[Window] WebContents loaded successfully');
+  });
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc) => {
+    console.error('[Window] Failed to load:', code, desc);
+  });
+  mainWindow.webContents.on('console-message', (_e, _level, message) => {
+    console.log('[Renderer Console]', message);
+  });
+
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else if (fs.existsSync(htmlPath)) {
@@ -137,15 +147,20 @@ function createWindow(): void {
 
 // ─── Tray ─────────────────────────────────────────────────────
 function createTray(): void {
-  let iconPath = path.join(__dirname, '../../resources/icon.ico');
-  if (!fs.existsSync(iconPath)) {
-    iconPath = path.join(process.resourcesPath, 'icon.ico');
-  }
-  const icon = fs.existsSync(iconPath)
-    ? nativeImage.createFromPath(iconPath)
-    : nativeImage.createEmpty();
-  tray = new Tray(icon);
-  tray.setToolTip('NetFlo — Network Bonding');
+  try {
+    let iconPath = path.join(__dirname, '../../resources/icon.ico');
+    if (!fs.existsSync(iconPath)) {
+      iconPath = path.join(process.resourcesPath, 'icon.ico');
+    }
+    const icon = fs.existsSync(iconPath)
+      ? nativeImage.createFromPath(iconPath)
+      : nativeImage.createEmpty();
+    if (icon.isEmpty()) {
+      console.warn('[Tray] Icon not found, skipping tray creation');
+      return;
+    }
+    tray = new Tray(icon);
+    tray.setToolTip('NetFlo — Network Bonding');
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -189,6 +204,9 @@ function createTray(): void {
 
   tray.on('click', showWindow);
   tray.on('double-click', showWindow);
+  } catch (err) {
+    console.warn('[Tray] Failed to initialize tray:', err);
+  }
 }
 
 // ─── Re-export for use in ipc handlers ───────────────────────
