@@ -18,8 +18,10 @@
     "build:renderer": "vite build",
     "electron": "electron .",
     "start": "npm run build && electron .",
+    "test": "npm run build:main && node --test test/**/*.test.js",
     "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && electron-builder --win"
+    "dist:win": "npm run build && electron-builder --win",
+    "repack": "node scripts/repack.js"
   },
   "dependencies": {
     "koffi": "^2.9.0",

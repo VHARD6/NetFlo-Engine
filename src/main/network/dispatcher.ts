@@ -12,7 +12,7 @@
  */
 
 import type { NetworkAdapter, DispatchMode } from '../../shared/types';
-import { GAMING_UDP_PORTS } from '../../shared/types';
+import { GAMING_UDP_PORTS, MEETING_PORTS, MEETING_DOMAINS } from '../../shared/types';
 
 export interface FlowKey {
   proto: 'tcp' | 'udp';
@@ -20,13 +20,31 @@ export interface FlowKey {
   dstPort: number;
 }
 
+export interface DispatchOptions {
+  meetingShieldActive?: boolean;
+  adapterPings?: Map<number, number>; // ifIndex -> ping in ms
+}
+
 // ─── Round-Robin State ───────────────────────────────────────
 let rrIndex = 0;
+
+/** Check if flow is meeting / VoIP / WebRTC traffic (Zoom, Teams, Meet, Discord, etc.) */
+export function isMeetingTraffic(flow: FlowKey): boolean {
+  if (MEETING_PORTS.has(flow.dstPort)) return true;
+  const host = flow.dstHost.toLowerCase();
+  for (const domain of MEETING_DOMAINS) {
+    if (host === domain || host.endsWith('.' + domain)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function chooseAdapter(
   flow: FlowKey,
   mode: DispatchMode,
-  adapters: NetworkAdapter[]
+  adapters: NetworkAdapter[],
+  options?: DispatchOptions
 ): NetworkAdapter {
   const active = adapters.filter(
     a => a.status === 'connected' && a.includedInBonding && a.ipv4
@@ -39,6 +57,13 @@ export function chooseAdapter(
   // Single adapter — no choice to make
   if (active.length === 1) return active[0];
 
+  // Zero-Drop Meeting Shield priority:
+  // If enabled and traffic is a video/voice meeting stream, pin to the lowest-latency stable adapter
+  // to avoid packet jitter and connection drops caused by multipath splitting
+  if (options?.meetingShieldActive && isMeetingTraffic(flow)) {
+    return dispatchMeeting(active, options.adapterPings);
+  }
+
   switch (mode) {
     case 'gaming':
       return dispatchGaming(flow, active);
@@ -50,6 +75,20 @@ export function chooseAdapter(
     default:
       return roundRobin(active);
   }
+}
+
+function dispatchMeeting(
+  active: NetworkAdapter[],
+  pings?: Map<number, number>
+): NetworkAdapter {
+  // Sort adapters: prefer lowest ping (if ping > 0); fallback to speed
+  const sorted = [...active].sort((a, b) => {
+    const pingA = (pings?.get(a.ifIndex) ?? 0) || 9999;
+    const pingB = (pings?.get(b.ifIndex) ?? 0) || 9999;
+    if (pingA !== pingB) return pingA - pingB;
+    return b.speedMbps - a.speedMbps;
+  });
+  return sorted[0];
 }
 
 function dispatchGaming(flow: FlowKey, active: NetworkAdapter[]): NetworkAdapter {
@@ -79,3 +118,4 @@ function roundRobin(active: NetworkAdapter[]): NetworkAdapter {
 export function resetRoundRobin(): void {
   rrIndex = 0;
 }
+

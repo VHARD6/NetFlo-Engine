@@ -6,6 +6,8 @@ import { ModeSelector } from './components/ModeSelector';
 import { KillerWarning } from './components/KillerWarning';
 import { StatusBar } from './components/StatusBar';
 import { LogPanel } from './components/LogPanel';
+import { QuotaCard } from './components/QuotaCard';
+import { SafeguardsCard } from './components/SafeguardsCard';
 
 export default function App() {
   const {
@@ -21,6 +23,10 @@ export default function App() {
     setWintun,
     applyFixes,
     openKillerSettings,
+    setQuota,
+    resetQuota,
+    setPowerSave,
+    setMeetingShield,
     isRunning,
     isStopped,
   } = useNetFlo();
@@ -42,7 +48,12 @@ export default function App() {
           <span className="text-slate-600 text-xs">v0.1.0</span>
         </div>
         <div className="no-drag">
-          <StatusBar status={state.status} socksPort={state.socksPort} />
+          <StatusBar
+            status={state.status}
+            socksPort={state.socksPort}
+            meetingShieldActive={state.meetingShieldActive}
+            powerSaveMode={state.powerSaveMode}
+          />
         </div>
       </div>
 
@@ -81,6 +92,25 @@ export default function App() {
           <ModeSelector
             mode={state.mode}
             onChange={setMode}
+            disabled={!isRunning}
+          />
+
+          {/* Daily Safeguards (Meeting Shield & Power Saver) */}
+          <SafeguardsCard
+            meetingShieldActive={state.meetingShieldActive}
+            protectedMeetingCount={state.protectedMeetingCount}
+            powerSaveMode={state.powerSaveMode}
+            onToggleMeetingShield={setMeetingShield}
+            onTogglePowerSave={setPowerSave}
+            disabled={!isRunning}
+          />
+
+          {/* Metered Data Quota & Budget Guard */}
+          <QuotaCard
+            adapters={state.adapters}
+            quotas={state.quotas}
+            onSetQuota={setQuota}
+            onResetQuota={resetQuota}
             disabled={!isRunning}
           />
 

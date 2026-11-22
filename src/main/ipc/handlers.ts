@@ -60,4 +60,40 @@ export function setupIpcHandlers(
   ipcMain.handle(IPC.OPEN_KILLER_SETTINGS, () => {
     openKillerControlCenter();
   });
+
+  // ── Phase 1 Safeguards (Quotas, Meeting Shield, Power Saver) ─
+  ipcMain.handle(IPC.GET_QUOTAS, () => {
+    return engine.getState().quotas;
+  });
+
+  ipcMain.handle(
+    IPC.SET_QUOTA,
+    (
+      _event,
+      ifIndex: number,
+      adapterName: string,
+      dailyCapBytes: number | null,
+      actionOnExceed?: 'disconnect' | 'notify-only',
+      warningThresholdPercent?: number
+    ) => {
+      engine.setQuota(ifIndex, adapterName, dailyCapBytes, actionOnExceed, warningThresholdPercent);
+      return engine.getState();
+    }
+  );
+
+  ipcMain.handle(IPC.RESET_QUOTA, (_event, ifIndex: number) => {
+    engine.resetQuota(ifIndex);
+    return engine.getState();
+  });
+
+  ipcMain.handle(IPC.SET_POWER_SAVE, (_event, enabled: boolean) => {
+    engine.setPowerSave(enabled);
+    return engine.getState();
+  });
+
+  ipcMain.handle(IPC.SET_MEETING_SHIELD, (_event, enabled: boolean) => {
+    engine.setMeetingShield(enabled);
+    return engine.getState();
+  });
 }
+

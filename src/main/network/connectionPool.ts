@@ -27,8 +27,13 @@ interface AdapterPool {
 export class ConnectionPool {
   private pools = new Map<number, AdapterPool>(); // keyed by ifIndex
   private statsInterval: NodeJS.Timeout | null = null;
+  private onBytesTransferred?: (ifIndex: number, adapterName: string, deltaBytes: number) => void;
 
   constructor() {}
+
+  setOnBytesTransferred(cb: (ifIndex: number, adapterName: string, deltaBytes: number) => void): void {
+    this.onBytesTransferred = cb;
+  }
 
   /** Initialize or update pools based on current adapter list */
   updateAdapters(adapters: NetworkAdapter[]): void {
@@ -83,12 +88,17 @@ export class ConnectionPool {
     // Track bytes transferred through this adapter
     socket.on('data', (chunk) => {
       pool.rxBytes += chunk.length;
+      this.onBytesTransferred?.(adapter.ifIndex, adapter.name, chunk.length);
     });
 
     const origWrite = socket.write.bind(socket);
+    const self = this;
     (socket as any).write = function (data: any, ...args: any[]) {
       const len = (data && (data.byteLength ?? data.length)) || (typeof data === 'string' ? Buffer.byteLength(data) : 0);
       pool.txBytes += len;
+      if (len > 0) {
+        self.onBytesTransferred?.(adapter.ifIndex, adapter.name, len);
+      }
       return origWrite(data, ...args);
     };
 

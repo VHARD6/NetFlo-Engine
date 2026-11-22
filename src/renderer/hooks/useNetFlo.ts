@@ -21,6 +21,17 @@ declare global {
       setWintun: (enabled: boolean) => Promise<NetFloState>;
       applyFixes: () => Promise<NetFloState>;
       openKillerSettings: () => void;
+      getQuotas: () => Promise<any[]>;
+      setQuota: (
+        ifIndex: number,
+        adapterName: string,
+        dailyCapBytes: number | null,
+        actionOnExceed?: string,
+        warningThresholdPercent?: number
+      ) => Promise<NetFloState>;
+      resetQuota: (ifIndex: number) => Promise<NetFloState>;
+      setPowerSave: (enabled: boolean) => Promise<NetFloState>;
+      setMeetingShield: (enabled: boolean) => Promise<NetFloState>;
       onStateUpdate: (cb: (state: NetFloState) => void) => () => void;
       onStatsUpdate: (cb: (stats: AdapterStats[]) => void) => () => void;
       onLog: (cb: (msg: string) => void) => () => void;
@@ -94,6 +105,39 @@ export function useNetFlo() {
     window.netflo.openKillerSettings();
   }, []);
 
+  const setQuota = useCallback(
+    async (
+      ifIndex: number,
+      adapterName: string,
+      dailyCapBytes: number | null,
+      actionOnExceed?: string,
+      warningThresholdPercent?: number
+    ) => {
+      setState(
+        await window.netflo.setQuota(
+          ifIndex,
+          adapterName,
+          dailyCapBytes,
+          actionOnExceed,
+          warningThresholdPercent
+        )
+      );
+    },
+    []
+  );
+
+  const resetQuota = useCallback(async (ifIndex: number) => {
+    setState(await window.netflo.resetQuota(ifIndex));
+  }, []);
+
+  const setPowerSave = useCallback(async (enabled: boolean) => {
+    setState(await window.netflo.setPowerSave(enabled));
+  }, []);
+
+  const setMeetingShield = useCallback(async (enabled: boolean) => {
+    setState(await window.netflo.setMeetingShield(enabled));
+  }, []);
+
   return {
     state,
     stats,
@@ -107,7 +151,12 @@ export function useNetFlo() {
     setWintun,
     applyFixes,
     openKillerSettings,
+    setQuota,
+    resetQuota,
+    setPowerSave,
+    setMeetingShield,
     isRunning: state?.status === 'running',
     isStopped: state?.status === 'stopped',
   };
 }
+

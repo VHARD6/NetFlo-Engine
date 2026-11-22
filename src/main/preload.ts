@@ -16,6 +16,11 @@ const IPC = {
   STOP: 'netflo:stop',
   APPLY_FIXES: 'netflo:apply-fixes',
   OPEN_KILLER_SETTINGS: 'netflo:open-killer-settings',
+  GET_QUOTAS: 'netflo:get-quotas',
+  SET_QUOTA: 'netflo:set-quota',
+  RESET_QUOTA: 'netflo:reset-quota',
+  SET_POWER_SAVE: 'netflo:set-power-save',
+  SET_MEETING_SHIELD: 'netflo:set-meeting-shield',
 } as const;
 
 // ─── Expose safe IPC API to renderer ─────────────────────────
@@ -32,6 +37,25 @@ contextBridge.exposeInMainWorld('netflo', {
   setWintun: (enabled: boolean) => ipcRenderer.invoke(IPC.SET_WINTUN, enabled),
   applyFixes: () => ipcRenderer.invoke(IPC.APPLY_FIXES),
   openKillerSettings: () => ipcRenderer.invoke(IPC.OPEN_KILLER_SETTINGS),
+  getQuotas: () => ipcRenderer.invoke(IPC.GET_QUOTAS),
+  setQuota: (
+    ifIndex: number,
+    adapterName: string,
+    dailyCapBytes: number | null,
+    actionOnExceed?: string,
+    warningThresholdPercent?: number
+  ) =>
+    ipcRenderer.invoke(
+      IPC.SET_QUOTA,
+      ifIndex,
+      adapterName,
+      dailyCapBytes,
+      actionOnExceed,
+      warningThresholdPercent
+    ),
+  resetQuota: (ifIndex: number) => ipcRenderer.invoke(IPC.RESET_QUOTA, ifIndex),
+  setPowerSave: (enabled: boolean) => ipcRenderer.invoke(IPC.SET_POWER_SAVE, enabled),
+  setMeetingShield: (enabled: boolean) => ipcRenderer.invoke(IPC.SET_MEETING_SHIELD, enabled),
 
   // ── Event listeners ───────────────────────────────────────
   onStateUpdate: (cb: (state: unknown) => void) => {

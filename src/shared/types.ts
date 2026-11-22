@@ -52,6 +52,18 @@ export interface AdapterStats {
   activeConnections: number;
 }
 
+export interface AdapterQuota {
+  ifIndex: number;
+  adapterName: string;
+  dailyCapBytes: number | null; // e.g. 1024 * 1024 * 1024 (1 GB), null = unlimited
+  usedTodayBytes: number;       // total rxBytes + txBytes counted today
+  lastResetDate: string;        // YYYY-MM-DD
+  actionOnExceed: 'disconnect' | 'notify-only';
+  warningThresholdPercent: number; // default 80
+  warningTriggered: boolean;
+  capExceeded: boolean;
+}
+
 export interface NetFloState {
   status: NetFloStatus;
   mode: DispatchMode;
@@ -67,6 +79,14 @@ export interface NetFloState {
   systemProxyActive: boolean;
   /** Whether Wintun Virtual Adapter is active */
   wintunActive: boolean;
+  /** Quotas configured for adapters */
+  quotas: AdapterQuota[];
+  /** Whether Zero-Drop Meeting Shield is active */
+  meetingShieldActive: boolean;
+  /** Number of meeting flows protected */
+  protectedMeetingCount: number;
+  /** Whether power-saver mode is active (on battery) */
+  powerSaveMode: boolean;
 }
 
 export interface AppRule {
@@ -109,6 +129,11 @@ export const IPC = {
   STOP: 'netflo:stop',
   APPLY_FIXES: 'netflo:apply-fixes',
   OPEN_KILLER_SETTINGS: 'netflo:open-killer-settings',
+  GET_QUOTAS: 'netflo:get-quotas',
+  SET_QUOTA: 'netflo:set-quota',
+  RESET_QUOTA: 'netflo:reset-quota',
+  SET_POWER_SAVE: 'netflo:set-power-save',
+  SET_MEETING_SHIELD: 'netflo:set-meeting-shield',
 } as const;
 
 /** Default gaming mode UDP ports — game server traffic */
@@ -126,5 +151,25 @@ export const GAMING_UDP_PORTS = new Set([
   443,   // keep this as fallback TCP
 ]);
 
+/** Meeting & VoIP ports prioritized by Meeting Shield */
+export const MEETING_PORTS = new Set([
+  3478, 3479, 3480, 3481, // STUN / TURN / Teams
+  5004, 5005,             // RTP Audio/Video
+  5060, 5061,             // SIP
+  8801, 8802,             // Zoom Media
+]);
+
+/** Known meeting domains */
+export const MEETING_DOMAINS = [
+  'zoom.us',
+  'teams.microsoft.com',
+  'skype.com',
+  'discord.gg',
+  'discord.media',
+  'meet.google.com',
+  'webex.com',
+];
+
 /** Ports considered "download" traffic — will be load-balanced */
 export const DOWNLOAD_PORTS = new Set([80, 443, 8080]);
+

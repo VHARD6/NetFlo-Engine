@@ -12,7 +12,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, powerMonitor } from 'electron';
 import { getAdapters, detectKillerServices } from './network/interfaces';
 import { ConnectionPool } from './network/connectionPool';
 import { Socks5Server } from './network/socks5Server';
@@ -23,24 +23,31 @@ import { detectKillerSuite } from './fixes/killerDetect';
 import { resetRoundRobin } from './network/dispatcher';
 import { enableSystemProxy, disableSystemProxy, isSystemProxyEnabled } from './network/systemProxy';
 import { WintunAdapter } from './network/wintun';
+import { QuotaManager } from './fixes/quotaManager';
 import type {
   NetFloState,
   NetworkAdapter,
   AdapterStats,
   DispatchMode,
+  AdapterQuota,
 } from '../shared/types';
 import { IPC } from '../shared/types';
 
 const SOCKS5_PORT = 1080;
-const ADAPTER_POLL_INTERVAL_MS = 3000;
-const STATS_PUSH_INTERVAL_MS = 500;
-const PING_INTERVAL_MS = 10_000;
+const ADAPTER_POLL_INTERVAL_NORMAL_MS = 3000;
+const STATS_PUSH_INTERVAL_NORMAL_MS = 500;
+const PING_INTERVAL_NORMAL_MS = 10_000;
+
+const ADAPTER_POLL_INTERVAL_POWERSAVE_MS = 6000;
+const STATS_PUSH_INTERVAL_POWERSAVE_MS = 1500;
+const PING_INTERVAL_POWERSAVE_MS = 30_000;
 
 export class NetFloEngine extends EventEmitter {
   private pool: ConnectionPool;
   private socksServer: Socks5Server;
   private wintun: WintunAdapter | null = null;
   private mainWindow: BrowserWindow | null = null;
+  private quotaManager: QuotaManager;
 
   private state: NetFloState;
   private adapterPollTimer: NodeJS.Timeout | null = null;
@@ -49,6 +56,7 @@ export class NetFloEngine extends EventEmitter {
 
   constructor() {
     super();
+    this.quotaManager = new QuotaManager();
     this.pool = new ConnectionPool();
     this.socksServer = new Socks5Server(this.pool, SOCKS5_PORT);
 
@@ -63,9 +71,44 @@ export class NetFloEngine extends EventEmitter {
       killerServices: [],
       systemProxyActive: false,
       wintunActive: false,
+      quotas: this.quotaManager.getQuotas(),
+      meetingShieldActive: true,
+      protectedMeetingCount: 0,
+      powerSaveMode: false,
     };
 
     this.socksServer.on('log', (msg: string) => this.log(msg));
+    this.socksServer.on('meeting-protected', () => {
+      this.state.protectedMeetingCount++;
+      this.pushState();
+    });
+
+    // Wire quota tracking to connection pool byte counts
+    this.pool.setOnBytesTransferred((ifIndex, adapterName, deltaBytes) => {
+      const res = this.quotaManager.recordBytes(ifIndex, adapterName, deltaBytes);
+      if (res.action === 'disconnect') {
+        this.setAdapterIncluded(ifIndex, false);
+        this.log(`[Quota Guard] 🛑 Adapter "${adapterName}" reached daily quota cap! Automatically disconnected from bonding.`);
+      } else if (res.warning) {
+        this.log(`[Quota Guard] ⚠️ Adapter "${adapterName}" reached 80% of daily data quota limit.`);
+      }
+    });
+
+    this.quotaManager.on('quota-updated', () => {
+      this.state.quotas = this.quotaManager.getQuotas();
+      this.pushState();
+    });
+
+    // Detect initial battery status and subscribe to power change events
+    try {
+      if (powerMonitor && typeof powerMonitor.isOnBatteryPower === 'function') {
+        this.state.powerSaveMode = powerMonitor.isOnBatteryPower();
+        powerMonitor.on('on-battery', () => this.handlePowerModeChange(true));
+        powerMonitor.on('on-ac', () => this.handlePowerModeChange(false));
+      }
+    } catch {
+      // powerMonitor may not be available in headless test environments
+    }
   }
 
   setWindow(win: BrowserWindow): void {
@@ -73,6 +116,7 @@ export class NetFloEngine extends EventEmitter {
   }
 
   getState(): NetFloState {
+
     return { ...this.state };
   }
 
@@ -138,13 +182,13 @@ export class NetFloEngine extends EventEmitter {
       this.pool.startStatsCollection();
 
       // Start periodic adapter polling
-      this.adapterPollTimer = setInterval(() => this.pollAdapters(), ADAPTER_POLL_INTERVAL_MS);
+      this.adapterPollTimer = setInterval(() => this.pollAdapters(), this.getAdapterPollInterval());
 
       // Start stats push to renderer
-      this.statsPushTimer = setInterval(() => this.pushStats(), STATS_PUSH_INTERVAL_MS);
+      this.statsPushTimer = setInterval(() => this.pushStats(), this.getStatsPushInterval());
 
       // Start ping measurements
-      this.pingTimer = setInterval(() => this.measurePings(), PING_INTERVAL_MS);
+      this.pingTimer = setInterval(() => this.measurePings(), this.getPingInterval());
       this.measurePings(); // immediate first measurement
 
       this.state.status = 'running';
@@ -255,6 +299,90 @@ export class NetFloEngine extends EventEmitter {
     this.pushState();
   }
 
+  // ─── Phase 1 Safeguards (Meeting Shield, Power Saver, Quotas) ──
+
+  setMeetingShield(active: boolean): void {
+    this.state.meetingShieldActive = active;
+    this.socksServer.setMeetingShield(active);
+    this.pushState();
+    this.log(`[Meeting Shield] ${active ? '🟢 Enabled — VoIP and conference calls prioritized' : '⚪ Disabled'}`);
+  }
+
+  setPowerSave(enabled: boolean): void {
+    this.state.powerSaveMode = enabled;
+    this.restartTimers();
+    this.pushState();
+    this.log(`[Engine] Power-Saver mode manually ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  private handlePowerModeChange(isBattery: boolean): void {
+    if (this.state.powerSaveMode === isBattery) return;
+    this.state.powerSaveMode = isBattery;
+    this.restartTimers();
+    this.pushState();
+    this.log(isBattery
+      ? '[Engine] 🔋 On Battery Power — Power-Saver mode active (reduced polling frequency)'
+      : '[Engine] ⚡ On AC Power — High performance mode restored');
+  }
+
+  private getAdapterPollInterval(): number {
+    return this.state.powerSaveMode
+      ? ADAPTER_POLL_INTERVAL_POWERSAVE_MS
+      : ADAPTER_POLL_INTERVAL_NORMAL_MS;
+  }
+
+  private getStatsPushInterval(): number {
+    return this.state.powerSaveMode
+      ? STATS_PUSH_INTERVAL_POWERSAVE_MS
+      : STATS_PUSH_INTERVAL_NORMAL_MS;
+  }
+
+  private getPingInterval(): number {
+    return this.state.powerSaveMode
+      ? PING_INTERVAL_POWERSAVE_MS
+      : PING_INTERVAL_NORMAL_MS;
+  }
+
+  private restartTimers(): void {
+    if (this.state.status !== 'running') return;
+
+    if (this.adapterPollTimer) clearInterval(this.adapterPollTimer);
+    if (this.statsPushTimer)   clearInterval(this.statsPushTimer);
+    if (this.pingTimer)        clearInterval(this.pingTimer);
+
+    this.adapterPollTimer = setInterval(() => this.pollAdapters(), this.getAdapterPollInterval());
+    this.statsPushTimer   = setInterval(() => this.pushStats(), this.getStatsPushInterval());
+    this.pingTimer        = setInterval(() => this.measurePings(), this.getPingInterval());
+  }
+
+  setQuota(
+    ifIndex: number,
+    adapterName: string,
+    dailyCapBytes: number | null,
+    actionOnExceed: 'disconnect' | 'notify-only' = 'disconnect',
+    warningThresholdPercent = 80
+  ): AdapterQuota {
+    const quota = this.quotaManager.setQuota(
+      ifIndex,
+      adapterName,
+      dailyCapBytes,
+      actionOnExceed,
+      warningThresholdPercent
+    );
+    this.state.quotas = this.quotaManager.getQuotas();
+    this.pushState();
+    const capStr = dailyCapBytes !== null ? `${Math.round(dailyCapBytes / (1024 * 1024))} MB` : 'Unlimited';
+    this.log(`[Quota Guard] Set quota for ${adapterName}: ${capStr} (Action: ${actionOnExceed})`);
+    return quota;
+  }
+
+  resetQuota(ifIndex: number): void {
+    this.quotaManager.resetQuota(ifIndex);
+    this.state.quotas = this.quotaManager.getQuotas();
+    this.pushState();
+    this.log(`[Quota Guard] Reset daily usage counter for adapter ${ifIndex}`);
+  }
+
   // ─── Polling ──────────────────────────────────────────────
 
   private refreshAdapters(): void {
@@ -285,9 +413,12 @@ export class NetFloEngine extends EventEmitter {
 
   private async measurePings(): Promise<void> {
     const pings = await pingAllAdapters(this.state.adapters);
+    const pingMap = new Map<number, number>();
     for (const [ifIndex, ms] of pings) {
       this.pool.updatePing(ifIndex, ms);
+      pingMap.set(ifIndex, ms);
     }
+    this.socksServer.updatePings(pingMap);
   }
 
   // ─── IPC Push Helpers ─────────────────────────────────────

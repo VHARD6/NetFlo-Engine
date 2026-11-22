@@ -4,6 +4,8 @@ import type { NetFloStatus } from '../../../shared/types';
 interface StatusBarProps {
   status: NetFloStatus;
   socksPort: number;
+  meetingShieldActive?: boolean;
+  powerSaveMode?: boolean;
 }
 
 const STATUS_CONFIG: Record<NetFloStatus, { label: string; color: string; dot: string }> = {
@@ -14,7 +16,12 @@ const STATUS_CONFIG: Record<NetFloStatus, { label: string; color: string; dot: s
   error:    { label: 'Error',    color: 'text-red-400', dot: 'bg-red-400' },
 };
 
-export function StatusBar({ status, socksPort }: StatusBarProps) {
+export function StatusBar({
+  status,
+  socksPort,
+  meetingShieldActive,
+  powerSaveMode,
+}: StatusBarProps) {
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.stopped;
 
   return (
@@ -23,6 +30,19 @@ export function StatusBar({ status, socksPort }: StatusBarProps) {
         <span className={`w-1.5 h-1.5 rounded-full inline-block ${cfg.dot}`} />
         <span className={cfg.color}>{cfg.label}</span>
       </div>
+
+      {meetingShieldActive && (
+        <span className="text-[11px] text-emerald-400/90 font-medium hidden sm:inline" title="Zero-Drop Meeting Shield is active">
+          🛡️ Shielded
+        </span>
+      )}
+
+      {powerSaveMode && (
+        <span className="text-[11px] text-amber-400/90 font-medium hidden sm:inline" title="Power-Saver mode is active">
+          🔋 Battery
+        </span>
+      )}
+
       {status === 'running' && (
         <span className="text-slate-600 font-mono">
           SOCKS5 :{socksPort}
@@ -31,3 +51,4 @@ export function StatusBar({ status, socksPort }: StatusBarProps) {
     </div>
   );
 }
+

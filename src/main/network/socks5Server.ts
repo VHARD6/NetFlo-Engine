@@ -23,7 +23,7 @@ import dns from 'dns/promises';
 import { EventEmitter } from 'events';
 import type { ConnectionPool } from './connectionPool';
 import type { NetworkAdapter, DispatchMode } from '../../shared/types';
-import { chooseAdapter } from './dispatcher';
+import { chooseAdapter, isMeetingTraffic } from './dispatcher';
 
 // ─── SOCKS5 Constants ────────────────────────────────────────
 const SOCKS5_VERSION    = 0x05;
@@ -45,6 +45,8 @@ export class Socks5Server extends EventEmitter {
   private adapters: NetworkAdapter[] = [];
   private mode: DispatchMode = 'round-robin';
   private connectionCount = 0;
+  private meetingShieldActive = true;
+  private adapterPings = new Map<number, number>();
 
   constructor(pool: ConnectionPool, port = 1080) {
     super();
@@ -56,6 +58,15 @@ export class Socks5Server extends EventEmitter {
     this.adapters = adapters;
     this.mode = mode;
   }
+
+  setMeetingShield(active: boolean): void {
+    this.meetingShieldActive = active;
+  }
+
+  updatePings(pings: Map<number, number>): void {
+    this.adapterPings = pings;
+  }
+
 
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -135,12 +146,19 @@ export class Socks5Server extends EventEmitter {
       const dstPort = (portBuf[0] << 8) | portBuf[1];
 
       // ── Step 4: Choose adapter and connect ───────────────
+      const flow = { proto: 'tcp' as const, dstHost, dstPort };
+      const isMeeting = isMeetingTraffic(flow);
+
       let adapter: NetworkAdapter;
       try {
         adapter = chooseAdapter(
-          { proto: 'tcp', dstHost, dstPort },
+          flow,
           this.mode,
-          this.adapters
+          this.adapters,
+          {
+            meetingShieldActive: this.meetingShieldActive,
+            adapterPings: this.adapterPings,
+          }
         );
       } catch (e) {
         this.emit('log', `[SOCKS5] No adapter available: ${e}`);
@@ -168,9 +186,16 @@ export class Socks5Server extends EventEmitter {
 
       // ── Step 6: Pipe data bidirectionally ─────────────────
       this.connectionCount++;
-      this.emit('log',
-        `[SOCKS5] [${this.connectionCount}] ${dstHost}:${dstPort} → via ${adapter.name}`
-      );
+      if (this.meetingShieldActive && isMeeting) {
+        this.emit('meeting-protected');
+        this.emit('log',
+          `[Meeting Shield] 🟢 Protected call/stream ${dstHost}:${dstPort} via ${adapter.name} (Latency optimized)`
+        );
+      } else {
+        this.emit('log',
+          `[SOCKS5] [${this.connectionCount}] ${dstHost}:${dstPort} → via ${adapter.name}`
+        );
+      }
 
       remote.on('error', () => client.destroy());
       client.on('error', () => remote.destroy());
