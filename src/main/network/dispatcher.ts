@@ -55,17 +55,27 @@ export function chooseAdapter(
   );
 
   // Auto-Turbo Standby Filtering:
-  // If autoTurbo is enabled, but NOT active, exclude the secondaryAdapterIndex from general bonding!
+  // If autoTurbo is enabled, but NOT active, exclude the secondary adapter from general bonding
+  // to conserve mobile tethering data during light tasks, unless a high-demand task triggers it!
   if (
     options?.autoTurbo?.enabled &&
-    !options.autoTurbo.active &&
-    options.autoTurbo.secondaryAdapterIndex !== null
+    !options.autoTurbo.active
   ) {
-    const withoutSecondary = active.filter(
-      a => a.ifIndex !== options.autoTurbo!.secondaryAdapterIndex
-    );
-    if (withoutSecondary.length > 0) {
-      active = withoutSecondary;
+    let secondaryIndex = options.autoTurbo.secondaryAdapterIndex;
+    if (secondaryIndex === null && active.length > 1) {
+      const tether = active.find(a => a.type === 'usb-tether');
+      if (tether) {
+        secondaryIndex = tether.ifIndex;
+      } else {
+        const sorted = [...active].sort((a, b) => (a.speedMbps || 100) - (b.speedMbps || 100));
+        secondaryIndex = sorted[0].ifIndex;
+      }
+    }
+    if (secondaryIndex !== null) {
+      const withoutSecondary = active.filter(a => a.ifIndex !== secondaryIndex);
+      if (withoutSecondary.length > 0) {
+        active = withoutSecondary;
+      }
     }
   }
 

@@ -40,17 +40,17 @@ function notifySystemSettingsChanged(): void {
   }
 }
 
-/** Enable Windows system-wide SOCKS5 proxy pointing to 127.0.0.1:<port> */
-export function enableSystemProxy(port = 1080): boolean {
+/** Enable Windows system-wide proxy pointing to 127.0.0.1:<socksPort> and <httpPort> */
+export function enableSystemProxy(socksPort = 1080, httpPort = 8080): boolean {
   if (process.platform !== 'win32') return false;
   try {
-    const proxyServer = `socks=127.0.0.1:${port}`;
+    const proxyServer = `http=127.0.0.1:${httpPort};https=127.0.0.1:${httpPort};socks=127.0.0.1:${socksPort}`;
     execSync(`reg add "${REG_KEY}" /v ProxyEnable /t REG_DWORD /d 1 /f`, { stdio: 'ignore' });
     execSync(`reg add "${REG_KEY}" /v ProxyServer /t REG_SZ /d "${proxyServer}" /f`, { stdio: 'ignore' });
     // Bypass local loopback addresses
     execSync(`reg add "${REG_KEY}" /v ProxyOverride /t REG_SZ /d "<local>;localhost;127.0.0.1" /f`, { stdio: 'ignore' });
     notifySystemSettingsChanged();
-    console.log(`[SystemProxy] System SOCKS5 proxy enabled on 127.0.0.1:${port}`);
+    console.log(`[SystemProxy] System proxy enabled on 127.0.0.1 (HTTP: ${httpPort}, SOCKS: ${socksPort})`);
     return true;
   } catch (e) {
     console.error('[SystemProxy] Failed to enable system proxy:', e);

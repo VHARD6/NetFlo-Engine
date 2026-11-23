@@ -119,9 +119,9 @@ export class NetFloEngine extends EventEmitter {
       ],
       portRules: [],
       autoTurbo: {
-        enabled: false,
+        enabled: true,
         active: false,
-        highThroughputThresholdBps: 10 * 1024 * 1024,
+        highThroughputThresholdBps: 2 * 1024 * 1024,
         highLatencyThresholdMs: 150,
         secondaryAdapterIndex: null,
       },
@@ -175,7 +175,7 @@ export class NetFloEngine extends EventEmitter {
     tetherAssistant.on('tether-optimized', (adapter: NetworkAdapter) => {
       this.state.tetherAssistant = tetherAssistant.getState();
       this.pushState();
-      this.log(`[Tether Assistant] ⚡ Auto-optimized tether adapter "${adapter.name}" with metric 9999`);
+      this.log(`[Tether Assistant] Auto-optimized tether adapter "${adapter.name}" with metric 9999`);
     });
 
     // Wire quota tracking to connection pool byte counts
@@ -183,9 +183,9 @@ export class NetFloEngine extends EventEmitter {
       const res = this.quotaManager.recordBytes(ifIndex, adapterName, deltaBytes);
       if (res.action === 'disconnect') {
         this.setAdapterIncluded(ifIndex, false);
-        this.log(`[Quota Guard] 🛑 Adapter "${adapterName}" reached daily quota cap! Automatically disconnected from bonding.`);
+        this.log(`[Quota Guard] Adapter "${adapterName}" reached daily quota cap! Automatically disconnected from bonding.`);
       } else if (res.warning) {
-        this.log(`[Quota Guard] ⚠️ Adapter "${adapterName}" reached 80% of daily data quota limit.`);
+        this.log(`[Quota Guard] Adapter "${adapterName}" reached 80% of daily data quota limit.`);
       }
     });
 
@@ -246,7 +246,7 @@ export class NetFloEngine extends EventEmitter {
     this.state.killerWarning = killer.detected;
     this.state.killerServices = killer.services;
     if (killer.detected) {
-      this.log(`[Engine] ⚠️  Killer suite detected: ${killer.services.join(', ')}`);
+      this.log(`[Engine] Killer suite detected: ${killer.services.join(', ')}`);
       this.log(`[Engine] ${killer.recommendation}`);
     }
 
@@ -301,13 +301,12 @@ export class NetFloEngine extends EventEmitter {
 
       this.state.status = 'running';
 
-      // Automatically enable system proxy if user had it active or requested
-      if (this.state.systemProxyActive) {
-        enableSystemProxy(this.state.socksPort);
-      }
+      // Automatically activate Windows system proxy so browser & app tasks immediately use bonded interfaces
+      this.state.systemProxyActive = true;
+      enableSystemProxy(this.state.socksPort, this.state.lanGateway.httpPort);
 
       this.pushState();
-      this.log('[Engine] NetFlo running ✓');
+      this.log('[Engine] NetFlo running');
 
     } catch (e) {
       this.state.status = 'error';
@@ -377,8 +376,8 @@ export class NetFloEngine extends EventEmitter {
     this.state.systemProxyActive = enabled;
     if (this.state.status === 'running') {
       if (enabled) {
-        enableSystemProxy(SOCKS5_PORT);
-        this.log('[Engine] Windows system proxy enabled (HTTP/HTTPS and browser traffic routed to SOCKS5)');
+        enableSystemProxy(this.state.socksPort, this.state.lanGateway.httpPort);
+        this.log('[Engine] Windows system proxy enabled (HTTP/HTTPS and browser traffic routed to NetFlo)');
       } else {
         disableSystemProxy();
         this.log('[Engine] Windows system proxy disabled');
@@ -418,7 +417,7 @@ export class NetFloEngine extends EventEmitter {
     this.socksServer.setMeetingShield(active);
     this.httpProxyServer.setMeetingShield(active);
     this.pushState();
-    this.log(`[Meeting Shield] ${active ? '🟢 Enabled — VoIP and conference calls prioritized' : '⚪ Disabled'}`);
+    this.log(`[Meeting Shield] ${active ? 'Enabled — VoIP and conference calls prioritized' : 'Disabled'}`);
   }
 
   setPowerSave(enabled: boolean): void {
@@ -434,8 +433,8 @@ export class NetFloEngine extends EventEmitter {
     this.restartTimers();
     this.pushState();
     this.log(isBattery
-      ? '[Engine] 🔋 On Battery Power — Power-Saver mode active (reduced polling frequency)'
-      : '[Engine] ⚡ On AC Power — High performance mode restored');
+      ? '[Engine] On Battery Power — Power-Saver mode active (reduced polling frequency)'
+      : '[Engine] On AC Power — High performance mode restored');
   }
 
   private getAdapterPollInterval(): number {
@@ -542,7 +541,7 @@ export class NetFloEngine extends EventEmitter {
         await this.socksServer.start(this.state.socksPort, this.state.lanGateway.bindHost);
         await this.httpProxyServer.start(this.state.lanGateway.httpPort, this.state.lanGateway.bindHost);
         this.log(
-          `[LAN Gateway] ${this.state.lanGateway.enabled ? '🟢 Activated on 0.0.0.0' : '⚪ Restricted to loopback (127.0.0.1)'} (SOCKS: ${this.state.socksPort}, HTTP: ${this.state.lanGateway.httpPort})`
+          `[LAN Gateway] ${this.state.lanGateway.enabled ? 'Activated on 0.0.0.0' : 'Restricted to loopback (127.0.0.1)'} (SOCKS: ${this.state.socksPort}, HTTP: ${this.state.lanGateway.httpPort})`
         );
       } catch (e) {
         this.log(`[LAN Gateway] Failed to restart proxies: ${e}`);
@@ -624,38 +623,52 @@ export class NetFloEngine extends EventEmitter {
       this.socksServer.getActiveClientCount() + this.httpProxyServer.getActiveClientCount();
 
     // Evaluate Auto-Turbo Congestion Assist
-    if (this.state.autoTurbo.enabled && this.state.autoTurbo.secondaryAdapterIndex !== null) {
-      let totalBps = 0;
-      for (const s of this.state.stats) {
-        totalBps += (s.rxBps + s.txBps);
-      }
-      const primaryStat = this.state.stats.find(
-        s => s.ifIndex !== this.state.autoTurbo.secondaryAdapterIndex
+    if (this.state.autoTurbo.enabled) {
+      let secondaryIndex = this.state.autoTurbo.secondaryAdapterIndex;
+      const connected = this.state.adapters.filter(
+        a => a.status === 'connected' && a.includedInBonding && a.ipv4
       );
-      const primaryPing = primaryStat?.pingMs ?? 0;
+      if (secondaryIndex === null && connected.length > 1) {
+        const tether = connected.find(a => a.type === 'usb-tether');
+        if (tether) {
+          secondaryIndex = tether.ifIndex;
+        } else {
+          const sorted = [...connected].sort((a, b) => (a.speedMbps || 100) - (b.speedMbps || 100));
+          secondaryIndex = sorted[0].ifIndex;
+        }
+      }
 
-      const shouldTurbo =
-        totalBps >= this.state.autoTurbo.highThroughputThresholdBps ||
-        (primaryPing > 0 && primaryPing >= this.state.autoTurbo.highLatencyThresholdMs);
+      if (secondaryIndex !== null) {
+        let totalBps = 0;
+        for (const s of this.state.stats) {
+          totalBps += (s.rxBps + s.txBps);
+        }
+        const primaryStat = this.state.stats.find(s => s.ifIndex !== secondaryIndex);
+        const primaryPing = primaryStat?.pingMs ?? 0;
 
-      if (shouldTurbo && !this.state.autoTurbo.active) {
-        this.state.autoTurbo.active = true;
-        this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
-        this.httpProxyServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
-        this.log(
-          `[Auto-Turbo] 🚀 High demand detected (${(totalBps / (1024 * 1024)).toFixed(1)} MB/s, Ping: ${primaryPing}ms) — Engaging secondary link!`
-        );
-        this.pushState();
-      } else if (!shouldTurbo && this.state.autoTurbo.active) {
-        if (
-          totalBps < this.state.autoTurbo.highThroughputThresholdBps * 0.5 &&
-          (primaryPing === 0 || primaryPing < this.state.autoTurbo.highLatencyThresholdMs * 0.8)
-        ) {
-          this.state.autoTurbo.active = false;
+        const shouldTurbo =
+          totalBps >= this.state.autoTurbo.highThroughputThresholdBps ||
+          (primaryPing > 0 && primaryPing >= this.state.autoTurbo.highLatencyThresholdMs);
+
+        if (shouldTurbo && !this.state.autoTurbo.active) {
+          this.state.autoTurbo.active = true;
           this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
           this.httpProxyServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
-          this.log('[Auto-Turbo] Traffic normalized — Secondary link returned to standby.');
+          this.log(
+            `[Auto-Turbo] High demand detected (${(totalBps / (1024 * 1024)).toFixed(1)} MB/s, Ping: ${primaryPing}ms) — Engaging secondary link`
+          );
           this.pushState();
+        } else if (!shouldTurbo && this.state.autoTurbo.active) {
+          if (
+            totalBps < this.state.autoTurbo.highThroughputThresholdBps * 0.5 &&
+            (primaryPing === 0 || primaryPing < this.state.autoTurbo.highLatencyThresholdMs * 0.8)
+          ) {
+            this.state.autoTurbo.active = false;
+            this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
+            this.httpProxyServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
+            this.log('[Auto-Turbo] Traffic normalized — Secondary link returned to standby');
+            this.pushState();
+          }
         }
       }
     }
