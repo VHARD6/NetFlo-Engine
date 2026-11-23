@@ -37,8 +37,10 @@ const ATYP_DOMAINNAME   = 0x03;
 const ATYP_IPV6         = 0x04;
 const REP_SUCCESS       = 0x00;
 const REP_FAILURE       = 0x01;
-const REP_CONN_REFUSED  = 0x05;
 const REP_HOST_UNREACH  = 0x04;
+const REP_CONN_REFUSED  = 0x05;
+const REP_CMD_NOT_SUPP  = 0x07;
+const REP_ADDR_NOT_SUPP = 0x08;
 
 export class Socks5Server extends EventEmitter {
   private server: net.Server | null = null;
@@ -61,6 +63,7 @@ export class Socks5Server extends EventEmitter {
     secondaryAdapterIndex: null,
   };
   private activeClients = new Set<string>();
+  private sockets = new Set<net.Socket>();
 
   constructor(pool: ConnectionPool, port = 1080, bindHost = '127.0.0.1', allowedSubnetsOnly = true) {
     super();
@@ -102,6 +105,10 @@ export class Socks5Server extends EventEmitter {
 
     return new Promise((resolve, reject) => {
       this.server = net.createServer(socket => this.handleClient(socket));
+      this.server.on('connection', socket => {
+        this.sockets.add(socket);
+        socket.once('close', () => this.sockets.delete(socket));
+      });
 
       this.server.once('error', reject);
       this.server.listen(this.port, this.bindHost, () => {
@@ -114,10 +121,34 @@ export class Socks5Server extends EventEmitter {
   stop(): Promise<void> {
     return new Promise(resolve => {
       if (!this.server) return resolve();
-      this.server.close(() => {
-        this.server = null;
-        this.activeClients.clear();
-        resolve();
+      const serverRef = this.server;
+      this.server = null;
+      this.activeClients.clear();
+
+      try {
+        if (typeof (serverRef as any).closeAllConnections === 'function') {
+          (serverRef as any).closeAllConnections();
+        }
+      } catch {}
+      for (const socket of this.sockets) {
+        try {
+          socket.destroy();
+        } catch {}
+      }
+      this.sockets.clear();
+
+      let resolved = false;
+      const done = () => {
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
+      };
+
+      const timer = setTimeout(done, 500);
+      serverRef.close(() => {
+        clearTimeout(timer);
+        done();
       });
     });
   }
@@ -163,7 +194,7 @@ export class Socks5Server extends EventEmitter {
       const reqHeader = await readBytes(client, 4);
       if (reqHeader[0] !== SOCKS5_VERSION || reqHeader[1] !== CMD_CONNECT) {
         this.emit('log', `[SOCKS5] Invalid header: ver=${reqHeader[0]}, cmd=${reqHeader[1]}`);
-        sendSocksReply(client, REP_FAILURE);
+        sendSocksReply(client, reqHeader[0] !== SOCKS5_VERSION ? REP_FAILURE : REP_CMD_NOT_SUPP);
         client.destroy();
         return;
       }
@@ -183,7 +214,7 @@ export class Socks5Server extends EventEmitter {
         dstHost = formatIPv6(ipBytes);
       } else {
         this.emit('log', `[SOCKS5] Unsupported atyp: ${atyp}`);
-        sendSocksReply(client, REP_FAILURE);
+        sendSocksReply(client, REP_ADDR_NOT_SUPP);
         client.destroy();
         return;
       }
@@ -240,6 +271,11 @@ export class Socks5Server extends EventEmitter {
       }
 
       // ── Step 5: Send success reply ───────────────────────
+      if (client.destroyed || !client.writable) {
+        remote.destroy();
+        return;
+      }
+
       const localAddr = remote.localAddress ?? '0.0.0.0';
       const localPort = remote.localPort ?? 0;
       sendSocksReply(client, REP_SUCCESS, localAddr, localPort);
@@ -275,9 +311,21 @@ export class Socks5Server extends EventEmitter {
 
 // ─── Helpers ─────────────────────────────────────────────────
 
-function readBytes(socket: net.Socket, n: number): Promise<Buffer> {
+function readBytes(socket: net.Socket, n: number, timeoutMs = 15000): Promise<Buffer> {
+  if (n <= 0) return Promise.resolve(Buffer.alloc(0));
+
   return new Promise((resolve, reject) => {
+    let timer: NodeJS.Timeout | null = setTimeout(() => {
+      cleanup();
+      socket.destroy();
+      reject(new Error(`Timed out waiting for ${n} bytes from client`));
+    }, timeoutMs);
+
     const cleanup = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
       socket.off('readable', onReadable);
       socket.off('error', onError);
       socket.off('close', onClose);

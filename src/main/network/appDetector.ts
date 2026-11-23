@@ -20,28 +20,45 @@ export class AppDetector {
   private portCache = new Map<number, { name: string; expires: number }>();
   private pidNameCache = new Map<number, string>();
   private lastPidRefresh = 0;
+  private activeNetstatPromise: Promise<string> | null = null;
+
+  private getNetstatOutput(): Promise<string> {
+    if (!this.activeNetstatPromise) {
+      this.activeNetstatPromise = execAsync('netstat -ano -p tcp', { windowsHide: true })
+        .then(res => res.stdout)
+        .catch(() => '')
+        .finally(() => {
+          this.activeNetstatPromise = null;
+        });
+    }
+    return this.activeNetstatPromise;
+  }
 
   /**
    * Find the process name (e.g. "discord.exe") that initiated the SOCKS5
    * connection on the specified local client ephemeral port.
    */
   async getProcessForPort(clientPort: number, socksPort = 1080): Promise<string | null> {
-    if (clientPort <= 0) return null;
+    const port = Math.floor(clientPort);
+    if (isNaN(port) || port <= 0 || port > 65535) return null;
 
     // 1. Check in-memory port cache
-    const cached = this.portCache.get(clientPort);
+    const cached = this.portCache.get(port);
     if (cached && cached.expires > Date.now()) {
       return cached.name;
     }
 
     try {
-      // 2. Query netstat to find connection from clientPort -> socksPort
-      const { stdout } = await execAsync(`netstat -ano -p tcp`, { windowsHide: true });
-      const lines = stdout.split(/\r?\n/);
+      // 2. Query netstat (coalescing simultaneous requests to prevent high CPU)
+      const stdout = await this.getNetstatOutput();
+      if (!stdout) return null;
 
+      const lines = stdout.split(/\r?\n/);
       let foundPid: number | null = null;
+
+      // Matches IPv4 (127.0.0.1, LAN IP) and IPv6 ([::1])
       const targetPattern = new RegExp(
-        `127\\.0\\.0\\.1:${clientPort}\\s+127\\.0\\.0\\.1:${socksPort}\\s+ESTABLISHED\\s+(\\d+)`,
+        `(?:127\\.0\\.0\\.1|\\[::1\\]|[\\d.]+):${port}\\s+.*:${socksPort}\\s+ESTABLISHED\\s+(\\d+)`,
         'i'
       );
 

@@ -91,7 +91,7 @@ export class QuotaManager extends EventEmitter {
     }
 
     this.quotas.set(ifIndex, quota);
-    this.scheduleSave();
+    this.saveToDisk();
     this.emit('quota-updated', quota);
     return quota;
   }
@@ -106,7 +106,7 @@ export class QuotaManager extends EventEmitter {
     quota.capExceeded = false;
     quota.lastResetDate = this.getTodayDateString();
 
-    this.scheduleSave();
+    this.saveToDisk();
     this.emit('quota-updated', quota);
   }
 
@@ -119,7 +119,9 @@ export class QuotaManager extends EventEmitter {
     adapterName: string,
     deltaBytes: number
   ): { warning: boolean; exceeded: boolean; action?: 'disconnect' } {
-    if (deltaBytes <= 0) return { warning: false, exceeded: false };
+    if (typeof deltaBytes !== 'number' || isNaN(deltaBytes) || !isFinite(deltaBytes) || deltaBytes <= 0) {
+      return { warning: false, exceeded: false };
+    }
 
     this.checkDayRollover();
 

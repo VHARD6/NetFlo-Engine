@@ -166,8 +166,8 @@ function dispatchGaming(flow: FlowKey, active: NetworkAdapter[]): NetworkAdapter
   // UDP game traffic → pin to single lowest-latency adapter
   // This prevents jitter caused by out-of-order packets across adapters
   if (flow.proto === 'udp' && GAMING_UDP_PORTS.has(flow.dstPort)) {
-    // Sort by latency (tracked externally via ping; fall back to speed)
-    return active.sort((a, b) => (a.speedMbps > b.speedMbps ? -1 : 1))[0];
+    // Sort by latency (tracked externally via ping; fall back to speed) without mutating active array
+    return [...active].sort((a, b) => (a.speedMbps > b.speedMbps ? -1 : 1))[0];
   }
 
   // HTTP/HTTPS downloads → round-robin across all adapters for bonded throughput

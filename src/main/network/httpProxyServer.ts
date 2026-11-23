@@ -45,6 +45,7 @@ export class HttpProxyServer extends EventEmitter {
   };
 
   private activeClients = new Set<string>();
+  private sockets = new Set<net.Socket>();
 
   constructor(pool: ConnectionPool, port = 8080, bindHost = '127.0.0.1', allowedSubnetsOnly = true) {
     super();
@@ -87,6 +88,10 @@ export class HttpProxyServer extends EventEmitter {
 
     return new Promise((resolve, reject) => {
       this.server = http.createServer((req, res) => this.handleHttpRequest(req, res));
+      this.server.on('connection', (socket: net.Socket) => {
+        this.sockets.add(socket);
+        socket.once('close', () => this.sockets.delete(socket));
+      });
       this.server.on('connect', (req, clientSocket, head) =>
         this.handleConnect(req, clientSocket as net.Socket, head)
       );
@@ -102,10 +107,34 @@ export class HttpProxyServer extends EventEmitter {
   async stop(): Promise<void> {
     return new Promise(resolve => {
       if (!this.server) return resolve();
-      this.server.close(() => {
-        this.server = null;
-        this.activeClients.clear();
-        resolve();
+      const serverRef = this.server;
+      this.server = null;
+      this.activeClients.clear();
+
+      try {
+        if (typeof (serverRef as any).closeAllConnections === 'function') {
+          (serverRef as any).closeAllConnections();
+        }
+      } catch {}
+      for (const socket of this.sockets) {
+        try {
+          socket.destroy();
+        } catch {}
+      }
+      this.sockets.clear();
+
+      let resolved = false;
+      const done = () => {
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
+      };
+
+      const timer = setTimeout(done, 500);
+      serverRef.close(() => {
+        clearTimeout(timer);
+        done();
       });
     });
   }
@@ -130,8 +159,26 @@ export class HttpProxyServer extends EventEmitter {
 
     this.trackClient(clientIp);
 
-    const [dstHost, portStr] = (req.url ?? '').split(':');
-    const dstPort = parseInt(portStr ?? '443', 10);
+    // Parse destination host and port (handles IPv4, hostnames, and bracketed IPv6 literals like [::1]:443)
+    let dstHost = '';
+    let dstPort = 443;
+    const rawUrl = req.url || '';
+    if (rawUrl.startsWith('[')) {
+      const closingBracket = rawUrl.indexOf(']');
+      if (closingBracket !== -1) {
+        dstHost = rawUrl.substring(1, closingBracket);
+        const portPart = rawUrl.substring(closingBracket + 2);
+        dstPort = parseInt(portPart || '443', 10);
+      }
+    } else {
+      const parts = rawUrl.split(':');
+      dstHost = parts[0] || '';
+      dstPort = parseInt(parts[1] || '443', 10);
+    }
+
+    if (isNaN(dstPort) || dstPort <= 0 || dstPort > 65535) {
+      dstPort = 443;
+    }
 
     if (!dstHost) {
       clientSocket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
@@ -174,6 +221,12 @@ export class HttpProxyServer extends EventEmitter {
       this.emit('log', `[HTTP Proxy] Connection to ${dstHost}:${dstPort} failed: ${e}`);
       clientSocket.write('HTTP/1.1 504 Gateway Timeout\r\n\r\n');
       clientSocket.destroy();
+      return;
+    }
+
+    // Guard against client abort while connection was being established
+    if (clientSocket.destroyed || !clientSocket.writable) {
+      remoteSocket.destroy();
       return;
     }
 
@@ -224,7 +277,8 @@ export class HttpProxyServer extends EventEmitter {
 
     const parsed = url.parse(req.url);
     const dstHost = parsed.hostname;
-    const dstPort = parseInt(parsed.port ?? '80', 10);
+    let dstPort = parseInt(parsed.port ?? '80', 10);
+    if (isNaN(dstPort) || dstPort <= 0 || dstPort > 65535) dstPort = 80;
 
     if (!dstHost) {
       res.writeHead(400);
@@ -253,57 +307,54 @@ export class HttpProxyServer extends EventEmitter {
         }
       );
     } catch {
-      res.writeHead(502);
+      res.writeHead(502, { 'Content-Type': 'text/plain' });
       res.end('No bonded adapter available');
       return;
     }
 
-    let remoteSocket: net.Socket;
-    try {
-      remoteSocket = await this.pool.createConnection(adapter, dstHost, dstPort);
-    } catch {
-      res.writeHead(504);
-      res.end('Gateway Timeout');
-      return;
-    }
-
-    // Reconstruct outgoing HTTP request line & headers
     const outgoingPath = parsed.path || '/';
-    let headersText = `${req.method} ${outgoingPath} HTTP/1.1\r\n`;
+    const sanitizedHeaders: http.OutgoingHttpHeaders = {};
     for (const [key, value] of Object.entries(req.headers)) {
       if (key.toLowerCase() === 'proxy-connection') continue;
-      if (Array.isArray(value)) {
-        for (const v of value) {
-          headersText += `${key}: ${v}\r\n`;
-        }
-      } else if (value !== undefined) {
-        headersText += `${key}: ${value}\r\n`;
+      if (value !== undefined) {
+        sanitizedHeaders[key] = value;
       }
     }
-    headersText += '\r\n';
+    sanitizedHeaders['host'] = dstHost;
 
-    remoteSocket.write(headersText);
+    try {
+      const forwardReq = http.request({
+        hostname: dstHost,
+        port: dstPort,
+        path: outgoingPath,
+        method: req.method,
+        headers: sanitizedHeaders,
+        createConnection: (_opts, cb) => {
+          this.pool
+            .createConnection(adapter, dstHost, dstPort)
+            .then(sock => cb(null, sock))
+            .catch(err => cb(err, undefined as any));
+          return undefined as any;
+        },
+      }, remoteRes => {
+        res.writeHead(remoteRes.statusCode || 200, remoteRes.headers);
+        remoteRes.pipe(res);
+      });
 
-    // Forward request payload if any
-    req.pipe(remoteSocket);
+      forwardReq.on('error', err => {
+        if (!res.headersSent) {
+          res.writeHead(502, { 'Content-Type': 'text/plain' });
+          res.end(`Bad Gateway: ${err.message}`);
+        }
+      });
 
-    // Write remote response back to client socket
-    remoteSocket.on('data', chunk => {
-      if (!res.writableEnded) {
-        res.socket?.write(chunk);
-      }
-    });
-
-    remoteSocket.on('end', () => {
-      res.end();
-    });
-
-    remoteSocket.on('error', () => {
+      req.pipe(forwardReq);
+    } catch (e) {
       if (!res.headersSent) {
-        res.writeHead(502);
-        res.end('Bad Gateway');
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end(`Internal Proxy Error: ${e}`);
       }
-    });
+    }
   }
 
   private trackClient(clientIp: string): void {
