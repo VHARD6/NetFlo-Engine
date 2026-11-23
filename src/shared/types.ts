@@ -64,6 +64,14 @@ export interface AdapterQuota {
   capExceeded: boolean;
 }
 
+export interface AutoTurboConfig {
+  enabled: boolean;
+  active: boolean;
+  highThroughputThresholdBps: number; // default 10 * 1024 * 1024 (10 MB/s)
+  highLatencyThresholdMs: number;     // default 150 ms
+  secondaryAdapterIndex: number | null; // tethering adapter on standby
+}
+
 export interface NetFloState {
   status: NetFloStatus;
   mode: DispatchMode;
@@ -87,6 +95,12 @@ export interface NetFloState {
   protectedMeetingCount: number;
   /** Whether power-saver mode is active (on battery) */
   powerSaveMode: boolean;
+  /** Per-App routing rules */
+  appRules: AppRule[];
+  /** Port-specific routing rules */
+  portRules: PortRule[];
+  /** Dynamic congestion assist & auto-turbo configuration */
+  autoTurbo: AutoTurboConfig;
 }
 
 export interface AppRule {
@@ -134,7 +148,14 @@ export const IPC = {
   RESET_QUOTA: 'netflo:reset-quota',
   SET_POWER_SAVE: 'netflo:set-power-save',
   SET_MEETING_SHIELD: 'netflo:set-meeting-shield',
+  GET_APP_RULES: 'netflo:get-app-rules',
+  SET_APP_RULES: 'netflo:set-app-rules',
+  GET_PORT_RULES: 'netflo:get-port-rules',
+  SET_PORT_RULES: 'netflo:set-port-rules',
+  GET_RUNNING_APPS: 'netflo:get-running-apps',
+  SET_AUTO_TURBO: 'netflo:set-auto-turbo',
 } as const;
+
 
 /** Default gaming mode UDP ports — game server traffic */
 export const GAMING_UDP_PORTS = new Set([

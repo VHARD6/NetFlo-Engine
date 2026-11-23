@@ -22,8 +22,9 @@ import net from 'net';
 import dns from 'dns/promises';
 import { EventEmitter } from 'events';
 import type { ConnectionPool } from './connectionPool';
-import type { NetworkAdapter, DispatchMode } from '../../shared/types';
+import type { NetworkAdapter, DispatchMode, AppRule, PortRule, AutoTurboConfig } from '../../shared/types';
 import { chooseAdapter, isMeetingTraffic } from './dispatcher';
+import { appDetector } from './appDetector';
 
 // ─── SOCKS5 Constants ────────────────────────────────────────
 const SOCKS5_VERSION    = 0x05;
@@ -47,6 +48,15 @@ export class Socks5Server extends EventEmitter {
   private connectionCount = 0;
   private meetingShieldActive = true;
   private adapterPings = new Map<number, number>();
+  private appRules: AppRule[] = [];
+  private portRules: PortRule[] = [];
+  private autoTurbo: AutoTurboConfig = {
+    enabled: false,
+    active: false,
+    highThroughputThresholdBps: 10 * 1024 * 1024,
+    highLatencyThresholdMs: 150,
+    secondaryAdapterIndex: null,
+  };
 
   constructor(pool: ConnectionPool, port = 1080) {
     super();
@@ -59,6 +69,12 @@ export class Socks5Server extends EventEmitter {
     this.mode = mode;
   }
 
+  updateRules(appRules: AppRule[], portRules: PortRule[], autoTurbo: AutoTurboConfig): void {
+    this.appRules = appRules;
+    this.portRules = portRules;
+    this.autoTurbo = autoTurbo;
+  }
+
   setMeetingShield(active: boolean): void {
     this.meetingShieldActive = active;
   }
@@ -66,6 +82,7 @@ export class Socks5Server extends EventEmitter {
   updatePings(pings: Map<number, number>): void {
     this.adapterPings = pings;
   }
+
 
 
   start(): Promise<void> {
@@ -145,8 +162,19 @@ export class Socks5Server extends EventEmitter {
       const portBuf = await readBytes(client, 2);
       const dstPort = (portBuf[0] << 8) | portBuf[1];
 
-      // ── Step 4: Choose adapter and connect ───────────────
-      const flow = { proto: 'tcp' as const, dstHost, dstPort };
+      // ── Step 4: Detect process, choose adapter and connect ─
+      const clientPort = client.remotePort ?? 0;
+      client.once('close', () => {
+        appDetector.releasePort(clientPort);
+      });
+
+      const processName = await appDetector.getProcessForPort(clientPort, this.port);
+      const flow = {
+        proto: 'tcp' as const,
+        dstHost,
+        dstPort,
+        processName: processName ?? undefined,
+      };
       const isMeeting = isMeetingTraffic(flow);
 
       let adapter: NetworkAdapter;
@@ -158,6 +186,9 @@ export class Socks5Server extends EventEmitter {
           {
             meetingShieldActive: this.meetingShieldActive,
             adapterPings: this.adapterPings,
+            appRules: this.appRules,
+            portRules: this.portRules,
+            autoTurbo: this.autoTurbo,
           }
         );
       } catch (e) {
@@ -186,14 +217,15 @@ export class Socks5Server extends EventEmitter {
 
       // ── Step 6: Pipe data bidirectionally ─────────────────
       this.connectionCount++;
+      const tag = processName ? `[${processName}] ` : '';
       if (this.meetingShieldActive && isMeeting) {
         this.emit('meeting-protected');
         this.emit('log',
-          `[Meeting Shield] 🟢 Protected call/stream ${dstHost}:${dstPort} via ${adapter.name} (Latency optimized)`
+          `[Meeting Shield] 🟢 Protected ${tag}${dstHost}:${dstPort} via ${adapter.name} (Latency optimized)`
         );
       } else {
         this.emit('log',
-          `[SOCKS5] [${this.connectionCount}] ${dstHost}:${dstPort} → via ${adapter.name}`
+          `[SOCKS5] [${this.connectionCount}] ${tag}${dstHost}:${dstPort} → via ${adapter.name}`
         );
       }
 

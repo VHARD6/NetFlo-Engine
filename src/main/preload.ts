@@ -21,6 +21,12 @@ const IPC = {
   RESET_QUOTA: 'netflo:reset-quota',
   SET_POWER_SAVE: 'netflo:set-power-save',
   SET_MEETING_SHIELD: 'netflo:set-meeting-shield',
+  GET_APP_RULES: 'netflo:get-app-rules',
+  SET_APP_RULES: 'netflo:set-app-rules',
+  GET_PORT_RULES: 'netflo:get-port-rules',
+  SET_PORT_RULES: 'netflo:set-port-rules',
+  GET_RUNNING_APPS: 'netflo:get-running-apps',
+  SET_AUTO_TURBO: 'netflo:set-auto-turbo',
 } as const;
 
 // ─── Expose safe IPC API to renderer ─────────────────────────
@@ -56,6 +62,13 @@ contextBridge.exposeInMainWorld('netflo', {
   resetQuota: (ifIndex: number) => ipcRenderer.invoke(IPC.RESET_QUOTA, ifIndex),
   setPowerSave: (enabled: boolean) => ipcRenderer.invoke(IPC.SET_POWER_SAVE, enabled),
   setMeetingShield: (enabled: boolean) => ipcRenderer.invoke(IPC.SET_MEETING_SHIELD, enabled),
+  getAppRules: () => ipcRenderer.invoke(IPC.GET_APP_RULES),
+  setAppRules: (rules: unknown[]) => ipcRenderer.invoke(IPC.SET_APP_RULES, rules),
+  getPortRules: () => ipcRenderer.invoke(IPC.GET_PORT_RULES),
+  setPortRules: (rules: unknown[]) => ipcRenderer.invoke(IPC.SET_PORT_RULES, rules),
+  getRunningApps: () => ipcRenderer.invoke(IPC.GET_RUNNING_APPS),
+  setAutoTurbo: (config: unknown) => ipcRenderer.invoke(IPC.SET_AUTO_TURBO, config),
+
 
   // ── Event listeners ───────────────────────────────────────
   onStateUpdate: (cb: (state: unknown) => void) => {

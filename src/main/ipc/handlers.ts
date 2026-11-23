@@ -95,5 +95,34 @@ export function setupIpcHandlers(
     engine.setMeetingShield(enabled);
     return engine.getState();
   });
+
+  // ── Phase 2: Per-App Routing & Auto-Turbo ────────────────
+  ipcMain.handle(IPC.GET_APP_RULES, () => {
+    return engine.getState().appRules;
+  });
+
+  ipcMain.handle(IPC.SET_APP_RULES, (_event, rules: any[]) => {
+    engine.setAppRules(rules);
+    return engine.getState();
+  });
+
+  ipcMain.handle(IPC.GET_PORT_RULES, () => {
+    return engine.getState().portRules;
+  });
+
+  ipcMain.handle(IPC.SET_PORT_RULES, (_event, rules: any[]) => {
+    engine.setPortRules(rules);
+    return engine.getState();
+  });
+
+  ipcMain.handle(IPC.GET_RUNNING_APPS, async () => {
+    return engine.getRunningApplications();
+  });
+
+  ipcMain.handle(IPC.SET_AUTO_TURBO, (_event, config: any) => {
+    engine.setAutoTurbo(config);
+    return engine.getState();
+  });
 }
+
 

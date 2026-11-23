@@ -11,18 +11,22 @@
  *                  the lowest-latency adapter
  */
 
-import type { NetworkAdapter, DispatchMode } from '../../shared/types';
+import type { NetworkAdapter, DispatchMode, AppRule, PortRule, AutoTurboConfig } from '../../shared/types';
 import { GAMING_UDP_PORTS, MEETING_PORTS, MEETING_DOMAINS } from '../../shared/types';
 
 export interface FlowKey {
   proto: 'tcp' | 'udp';
   dstHost: string;
   dstPort: number;
+  processName?: string;
 }
 
 export interface DispatchOptions {
   meetingShieldActive?: boolean;
   adapterPings?: Map<number, number>; // ifIndex -> ping in ms
+  appRules?: AppRule[];
+  portRules?: PortRule[];
+  autoTurbo?: AutoTurboConfig;
 }
 
 // ─── Round-Robin State ───────────────────────────────────────
@@ -46,36 +50,103 @@ export function chooseAdapter(
   adapters: NetworkAdapter[],
   options?: DispatchOptions
 ): NetworkAdapter {
-  const active = adapters.filter(
+  let active = adapters.filter(
     a => a.status === 'connected' && a.includedInBonding && a.ipv4
   );
+
+  // Auto-Turbo Standby Filtering:
+  // If autoTurbo is enabled, but NOT active, exclude the secondaryAdapterIndex from general bonding!
+  if (
+    options?.autoTurbo?.enabled &&
+    !options.autoTurbo.active &&
+    options.autoTurbo.secondaryAdapterIndex !== null
+  ) {
+    const withoutSecondary = active.filter(
+      a => a.ifIndex !== options.autoTurbo!.secondaryAdapterIndex
+    );
+    if (withoutSecondary.length > 0) {
+      active = withoutSecondary;
+    }
+  }
 
   if (active.length === 0) {
     throw new Error('[Dispatcher] No active adapters available for bonding');
   }
 
-  // Single adapter — no choice to make
+  // 1. Check Per-App Rule override
+  if (flow.processName && options?.appRules) {
+    const proc = flow.processName.toLowerCase();
+    const matchedRule = options.appRules.find(
+      r => r.enabled && r.processName.toLowerCase() === proc
+    );
+    if (matchedRule) {
+      if (matchedRule.pinnedAdapterIndex !== null) {
+        const pinned = adapters.find(
+          a => a.ifIndex === matchedRule.pinnedAdapterIndex && a.status === 'connected' && a.ipv4
+        );
+        if (pinned) return pinned;
+      }
+      if (matchedRule.mode) {
+        return dispatchByMode(flow, matchedRule.mode, active, options);
+      }
+    }
+  }
+
+  // 2. Check Port Rule override
+  if (options?.portRules) {
+    const matchedPortRule = options.portRules.find(
+      r =>
+        r.enabled &&
+        r.port === flow.dstPort &&
+        (r.protocol === 'both' || r.protocol === flow.proto)
+    );
+    if (matchedPortRule) {
+      if (matchedPortRule.pinnedAdapterIndex !== null) {
+        const pinned = adapters.find(
+          a => a.ifIndex === matchedPortRule.pinnedAdapterIndex && a.status === 'connected' && a.ipv4
+        );
+        if (pinned) return pinned;
+      }
+      if (matchedPortRule.mode) {
+        return dispatchByMode(flow, matchedPortRule.mode, active, options);
+      }
+    }
+  }
+
+  // Single adapter remaining — no choice to make
   if (active.length === 1) return active[0];
 
-  // Zero-Drop Meeting Shield priority:
-  // If enabled and traffic is a video/voice meeting stream, pin to the lowest-latency stable adapter
-  // to avoid packet jitter and connection drops caused by multipath splitting
+  // 3. Zero-Drop Meeting Shield priority:
+  // Pin to lowest-latency adapter to avoid multipath jitter & packet reordering
   if (options?.meetingShieldActive && isMeetingTraffic(flow)) {
     return dispatchMeeting(active, options.adapterPings);
   }
+
+  // 4. Global Dispatch Mode
+  return dispatchByMode(flow, mode, active, options);
+}
+
+function dispatchByMode(
+  flow: FlowKey,
+  mode: DispatchMode,
+  active: NetworkAdapter[],
+  options?: DispatchOptions
+): NetworkAdapter {
+  if (active.length === 1) return active[0];
 
   switch (mode) {
     case 'gaming':
       return dispatchGaming(flow, active);
 
     case 'failover':
-      return active[0]; // already sorted by speed (primary first)
+      return active[0]; // primary first
 
     case 'round-robin':
     default:
       return roundRobin(active);
   }
 }
+
 
 function dispatchMeeting(
   active: NetworkAdapter[],

@@ -8,6 +8,8 @@ import { StatusBar } from './components/StatusBar';
 import { LogPanel } from './components/LogPanel';
 import { QuotaCard } from './components/QuotaCard';
 import { SafeguardsCard } from './components/SafeguardsCard';
+import { AppRoutingCard } from './components/AppRoutingCard';
+import { AutoTurboCard } from './components/AutoTurboCard';
 
 export default function App() {
   const {
@@ -27,6 +29,9 @@ export default function App() {
     resetQuota,
     setPowerSave,
     setMeetingShield,
+    setAppRules,
+    getRunningApps,
+    setAutoTurbo,
     isRunning,
     isStopped,
   } = useNetFlo();
@@ -105,12 +110,29 @@ export default function App() {
             disabled={!isRunning}
           />
 
+          {/* Dynamic Congestion Assist (Auto-Turbo) */}
+          <AutoTurboCard
+            config={state.autoTurbo}
+            adapters={state.adapters}
+            onUpdateConfig={setAutoTurbo}
+            disabled={!isRunning}
+          />
+
           {/* Metered Data Quota & Budget Guard */}
           <QuotaCard
             adapters={state.adapters}
             quotas={state.quotas}
             onSetQuota={setQuota}
             onResetQuota={resetQuota}
+            disabled={!isRunning}
+          />
+
+          {/* Per-App Split Tunneling */}
+          <AppRoutingCard
+            rules={state.appRules}
+            adapters={state.adapters}
+            onUpdateRules={setAppRules}
+            onGetRunningApps={getRunningApps}
             disabled={!isRunning}
           />
 

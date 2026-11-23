@@ -24,12 +24,16 @@ import { resetRoundRobin } from './network/dispatcher';
 import { enableSystemProxy, disableSystemProxy, isSystemProxyEnabled } from './network/systemProxy';
 import { WintunAdapter } from './network/wintun';
 import { QuotaManager } from './fixes/quotaManager';
+import { appDetector } from './network/appDetector';
 import type {
   NetFloState,
   NetworkAdapter,
   AdapterStats,
   DispatchMode,
   AdapterQuota,
+  AppRule,
+  PortRule,
+  AutoTurboConfig,
 } from '../shared/types';
 import { IPC } from '../shared/types';
 
@@ -75,7 +79,22 @@ export class NetFloEngine extends EventEmitter {
       meetingShieldActive: true,
       protectedMeetingCount: 0,
       powerSaveMode: false,
+      appRules: [
+        { id: 'discord', processName: 'discord.exe', mode: 'gaming', pinnedAdapterIndex: null, enabled: true },
+        { id: 'steam', processName: 'steam.exe', mode: 'round-robin', pinnedAdapterIndex: null, enabled: true },
+        { id: 'obs', processName: 'obs64.exe', mode: 'failover', pinnedAdapterIndex: null, enabled: false },
+      ],
+      portRules: [],
+      autoTurbo: {
+        enabled: false,
+        active: false,
+        highThroughputThresholdBps: 10 * 1024 * 1024,
+        highLatencyThresholdMs: 150,
+        secondaryAdapterIndex: null,
+      },
     };
+
+    this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
 
     this.socksServer.on('log', (msg: string) => this.log(msg));
     this.socksServer.on('meeting-protected', () => {
@@ -383,6 +402,35 @@ export class NetFloEngine extends EventEmitter {
     this.log(`[Quota Guard] Reset daily usage counter for adapter ${ifIndex}`);
   }
 
+  // ─── Phase 2: Per-App Routing & Auto-Turbo ────────────────
+
+  setAppRules(rules: AppRule[]): void {
+    this.state.appRules = rules;
+    this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
+    this.pushState();
+    this.log(`[Engine] Configured ${rules.length} per-application split-tunneling rules`);
+  }
+
+  setPortRules(rules: PortRule[]): void {
+    this.state.portRules = rules;
+    this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
+    this.pushState();
+    this.log(`[Engine] Configured ${rules.length} port routing rules`);
+  }
+
+  setAutoTurbo(config: Partial<AutoTurboConfig>): void {
+    this.state.autoTurbo = { ...this.state.autoTurbo, ...config };
+    this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
+    this.pushState();
+    this.log(
+      `[Engine] Dynamic Congestion Assist (Auto-Turbo) ${this.state.autoTurbo.enabled ? 'enabled' : 'disabled'}`
+    );
+  }
+
+  async getRunningApplications(): Promise<string[]> {
+    return appDetector.getRunningApplications();
+  }
+
   // ─── Polling ──────────────────────────────────────────────
 
   private refreshAdapters(): void {
@@ -431,6 +479,42 @@ export class NetFloEngine extends EventEmitter {
   private pushStats(): void {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.state.stats = this.pool.getStats();
+
+    // Evaluate Auto-Turbo Congestion Assist
+    if (this.state.autoTurbo.enabled && this.state.autoTurbo.secondaryAdapterIndex !== null) {
+      let totalBps = 0;
+      for (const s of this.state.stats) {
+        totalBps += (s.rxBps + s.txBps);
+      }
+      const primaryStat = this.state.stats.find(
+        s => s.ifIndex !== this.state.autoTurbo.secondaryAdapterIndex
+      );
+      const primaryPing = primaryStat?.pingMs ?? 0;
+
+      const shouldTurbo =
+        totalBps >= this.state.autoTurbo.highThroughputThresholdBps ||
+        (primaryPing > 0 && primaryPing >= this.state.autoTurbo.highLatencyThresholdMs);
+
+      if (shouldTurbo && !this.state.autoTurbo.active) {
+        this.state.autoTurbo.active = true;
+        this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
+        this.log(
+          `[Auto-Turbo] 🚀 High demand detected (${(totalBps / (1024 * 1024)).toFixed(1)} MB/s, Ping: ${primaryPing}ms) — Engaging secondary link!`
+        );
+        this.pushState();
+      } else if (!shouldTurbo && this.state.autoTurbo.active) {
+        if (
+          totalBps < this.state.autoTurbo.highThroughputThresholdBps * 0.5 &&
+          (primaryPing === 0 || primaryPing < this.state.autoTurbo.highLatencyThresholdMs * 0.8)
+        ) {
+          this.state.autoTurbo.active = false;
+          this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
+          this.log('[Auto-Turbo] Traffic normalized — Secondary link returned to standby.');
+          this.pushState();
+        }
+      }
+    }
+
     this.mainWindow.webContents.send(IPC.STATS_UPDATE, this.state.stats);
   }
 

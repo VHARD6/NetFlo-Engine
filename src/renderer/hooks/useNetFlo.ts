@@ -32,6 +32,12 @@ declare global {
       resetQuota: (ifIndex: number) => Promise<NetFloState>;
       setPowerSave: (enabled: boolean) => Promise<NetFloState>;
       setMeetingShield: (enabled: boolean) => Promise<NetFloState>;
+      getAppRules: () => Promise<any[]>;
+      setAppRules: (rules: any[]) => Promise<NetFloState>;
+      getPortRules: () => Promise<any[]>;
+      setPortRules: (rules: any[]) => Promise<NetFloState>;
+      getRunningApps: () => Promise<string[]>;
+      setAutoTurbo: (config: any) => Promise<NetFloState>;
       onStateUpdate: (cb: (state: NetFloState) => void) => () => void;
       onStatsUpdate: (cb: (stats: AdapterStats[]) => void) => () => void;
       onLog: (cb: (msg: string) => void) => () => void;
@@ -138,6 +144,22 @@ export function useNetFlo() {
     setState(await window.netflo.setMeetingShield(enabled));
   }, []);
 
+  const setAppRules = useCallback(async (rules: any[]) => {
+    setState(await window.netflo.setAppRules(rules));
+  }, []);
+
+  const setPortRules = useCallback(async (rules: any[]) => {
+    setState(await window.netflo.setPortRules(rules));
+  }, []);
+
+  const getRunningApps = useCallback(async () => {
+    return window.netflo.getRunningApps();
+  }, []);
+
+  const setAutoTurbo = useCallback(async (config: any) => {
+    setState(await window.netflo.setAutoTurbo(config));
+  }, []);
+
   return {
     state,
     stats,
@@ -155,6 +177,10 @@ export function useNetFlo() {
     resetQuota,
     setPowerSave,
     setMeetingShield,
+    setAppRules,
+    setPortRules,
+    getRunningApps,
+    setAutoTurbo,
     isRunning: state?.status === 'running',
     isStopped: state?.status === 'stopped',
   };
