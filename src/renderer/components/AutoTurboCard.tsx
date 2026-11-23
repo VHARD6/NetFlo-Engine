@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AutoTurboConfig, NetworkAdapter } from '../../../shared/types';
+import { IconZap } from './Icons';
 
 interface AutoTurboCardProps {
   config: AutoTurboConfig;
@@ -18,45 +19,64 @@ export function AutoTurboCard({
 
   return (
     <div className="card space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="min-w-0">
-          <div className="text-xs font-medium text-slate-200 flex items-center gap-1.5">
-            <span>🚀 Auto-Turbo Congestion Assist</span>
-            {config.enabled && (
-              <span
-                className={`text-[10px] px-1 rounded font-medium border ${
-                  config.active
-                    ? 'bg-amber-950/80 text-amber-300 border-amber-800/40 animate-pulse'
-                    : 'bg-emerald-950/80 text-emerald-300 border-emerald-800/40'
-                }`}
-              >
-                {config.active ? 'Turbo Active' : 'Standby'}
-              </span>
-            )}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-start gap-2.5 min-w-0">
+          <div
+            className={`
+              w-7 h-7 rounded-md flex items-center justify-center shrink-0 mt-0.5 border
+              ${config.enabled
+                ? config.active
+                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                  : 'bg-brand-500/10 text-brand-400 border-brand-500/30'
+                : 'bg-white/[0.03] text-slate-500 border-white/[0.06]'
+              }
+            `}
+          >
+            <IconZap size={14} />
           </div>
-          <div className="text-[11px] text-slate-500">
-            {config.enabled
-              ? config.active
-                ? 'Secondary link engaged to boost heavy load'
-                : 'Secondary link held idle in standby to conserve data'
-              : 'Keeps secondary mobile tether on standby until needed'}
+
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-[#f7f8f8]">
+                Auto-Turbo Congestion Assist
+              </span>
+              {config.enabled && (
+                <span
+                  className={
+                    config.active
+                      ? 'badge-yellow text-[10px] py-0 px-1.5'
+                      : 'badge-green text-[10px] py-0 px-1.5'
+                  }
+                >
+                  {config.active ? 'Turbo Engaged' : 'Standby'}
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+              {config.enabled
+                ? config.active
+                  ? 'Secondary link dynamically activated to burst high throughput'
+                  : 'Secondary link held in standby to conserve cellular data'
+                : 'Holds secondary mobile link idle until peak bandwidth or latency spike'}
+            </div>
           </div>
         </div>
 
         <button
+          type="button"
           role="switch"
           aria-checked={config.enabled}
           onClick={() => onUpdateConfig({ enabled: !config.enabled })}
           disabled={disabled}
           className={`
-            relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors
+            relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-150
             focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed
-            ${config.enabled ? 'bg-amber-600' : 'bg-slate-600'}
+            ${config.enabled ? 'bg-brand-500' : 'bg-surface-4'}
           `}
         >
           <span
             className={`
-              inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform
+              inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-150
               ${config.enabled ? 'translate-x-4' : 'translate-x-1'}
             `}
           />
@@ -64,9 +84,9 @@ export function AutoTurboCard({
       </div>
 
       {config.enabled && (
-        <div className="bg-slate-800/70 p-2.5 rounded border border-slate-700/60 space-y-2 text-xs">
+        <div className="bg-surface-1 p-3 rounded-lg border border-white/[0.06] space-y-2.5 text-xs">
           <div>
-            <label className="text-[11px] text-slate-400 block mb-1">
+            <label className="text-[11px] text-slate-400 block mb-1 font-medium">
               Standby Adapter (e.g. Phone 5G / Tether):
             </label>
             <select
@@ -76,9 +96,9 @@ export function AutoTurboCard({
                   secondaryAdapterIndex: e.target.value ? parseInt(e.target.value, 10) : null,
                 })
               }
-              className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none"
+              className="w-full bg-surface-2 border border-white/[0.08] rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-brand-500/60"
             >
-              <option value="">Select Adapter to Keep on Standby</option>
+              <option value="">Choose an adapter for auto-standby</option>
               {activeAdapters.map(a => (
                 <option key={a.ifIndex} value={a.ifIndex}>
                   {a.name} ({a.type})
@@ -87,8 +107,11 @@ export function AutoTurboCard({
             </select>
           </div>
 
-          <div className="text-[11px] text-slate-400">
-            Triggers when download exceeds <span className="text-slate-200 font-medium">10 MB/s</span> or Wi-Fi latency exceeds <span className="text-slate-200 font-medium">150 ms</span>.
+          <div className="text-[11px] text-slate-500 flex items-center justify-between border-t border-white/[0.04] pt-2">
+            <span>Engagement threshold</span>
+            <span className="font-mono text-slate-300">
+              &gt; 10 MB/s or &gt; 150 ms latency
+            </span>
           </div>
         </div>
       )}

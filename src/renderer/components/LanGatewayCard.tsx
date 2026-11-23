@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 import type { LanGatewayConfig } from '../../shared/types';
+import { IconShare, IconPhone, IconCopy, IconCheck, IconQr } from './Icons';
 
 interface LanGatewayCardProps {
   config: LanGatewayConfig;
@@ -20,11 +21,11 @@ export const LanGatewayCard: React.FC<LanGatewayCardProps> = ({ config, onUpdate
 
   useEffect(() => {
     QRCode.toDataURL(proxyUrl, {
-      width: 180,
+      width: 160,
       margin: 1,
       color: {
         dark: '#ffffff',
-        light: '#090d16',
+        light: '#08090a',
       },
     })
       .then(setQrDataUrl)
@@ -38,129 +39,131 @@ export const LanGatewayCard: React.FC<LanGatewayCardProps> = ({ config, onUpdate
   };
 
   return (
-    <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-lg backdrop-blur relative overflow-hidden">
+    <div className="card space-y-3.5">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"
-              />
-            </svg>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
+            <IconShare size={15} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-white font-semibold text-base">LAN Gateway & Hotspot Share</h3>
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                Phase 3
-              </span>
+              <h3 className="text-xs font-semibold text-[#f7f8f8]">LAN Gateway & Hotspot Share</h3>
+              <span className="badge-green text-[10px] py-0 px-1.5">Ecosystem</span>
             </div>
-            <p className="text-xs text-slate-400">
-              Share bonded connection with phones, iPads, consoles, or other laptops on local Wi-Fi.
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Share aggregated connection with mobile phones, tablets, or consoles on local Wi-Fi.
             </p>
           </div>
         </div>
 
-        {/* Enable / Disable Toggle */}
+        {/* Toggle */}
         <button
+          type="button"
+          role="switch"
+          aria-checked={config.enabled}
           onClick={() => onUpdate({ enabled: !config.enabled })}
           disabled={!isRunning}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-            config.enabled ? 'bg-emerald-600' : 'bg-slate-700'
-          } ${!isRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          className={`
+            relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-150
+            focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed
+            ${config.enabled ? 'bg-emerald-500' : 'bg-surface-4'}
+          `}
           title={!isRunning ? 'Start NetFlo Engine first' : 'Toggle LAN Gateway'}
         >
           <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              config.enabled ? 'translate-x-6' : 'translate-x-1'
-            }`}
+            className={`
+              inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-150
+              ${config.enabled ? 'translate-x-4' : 'translate-x-1'}
+            `}
           />
         </button>
       </div>
 
       {/* Gateway Status & IP Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
         {/* Local IP */}
-        <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3">
-          <div className="flex justify-between items-center text-xs text-slate-400 mb-1">
+        <div className="bg-surface-1 border border-white/[0.06] rounded-lg p-2.5">
+          <div className="flex justify-between items-center text-[10px] text-slate-500 uppercase tracking-wider mb-1 font-medium">
             <span>Gateway Host IP</span>
             <button
+              type="button"
               onClick={() => copyToClipboard(localIp, 'ip')}
-              className="text-emerald-400 hover:text-emerald-300 font-mono text-[10px]"
+              className="text-emerald-400 hover:text-emerald-300 font-mono text-[10px] flex items-center gap-0.5 cursor-pointer"
             >
-              {copiedField === 'ip' ? 'Copied!' : 'Copy'}
+              {copiedField === 'ip' ? <IconCheck size={10} /> : <IconCopy size={10} />}
+              <span>{copiedField === 'ip' ? 'Copied' : 'Copy'}</span>
             </button>
           </div>
-          <div className="text-sm font-mono font-medium text-slate-200">{localIp}</div>
+          <div className="text-xs font-mono font-medium text-slate-200">{localIp}</div>
         </div>
 
         {/* HTTP / SOCKS Ports */}
-        <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3">
-          <div className="flex justify-between items-center text-xs text-slate-400 mb-1">
+        <div className="bg-surface-1 border border-white/[0.06] rounded-lg p-2.5">
+          <div className="flex justify-between items-center text-[10px] text-slate-500 uppercase tracking-wider mb-1 font-medium">
             <span>Proxy Ports</span>
-            <span className="text-[10px] text-slate-400 font-mono">HTTP / SOCKS5</span>
+            <span className="text-[10px] text-slate-500 font-mono">HTTP / SOCKS5</span>
           </div>
-          <div className="text-sm font-mono font-medium text-slate-200">
+          <div className="text-xs font-mono font-medium text-slate-200">
             {httpPort} / {socksPort}
           </div>
         </div>
 
         {/* Connected Clients */}
-        <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 flex flex-col justify-between">
-          <div className="flex justify-between items-center text-xs text-slate-400">
+        <div className="bg-surface-1 border border-white/[0.06] rounded-lg p-2.5 flex flex-col justify-between">
+          <div className="flex justify-between items-center text-[10px] text-slate-500 uppercase tracking-wider font-medium">
             <span>Connected Devices</span>
             <span
-              className={`w-2 h-2 rounded-full ${
-                config.enabled && isRunning ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'
+              className={`w-1.5 h-1.5 rounded-full ${
+                config.enabled && isRunning ? 'bg-emerald-400' : 'bg-slate-600'
               }`}
             />
           </div>
-          <div className="text-sm font-medium text-slate-200">
-            {config.enabled ? `${config.activeClients} active client(s)` : 'Gateway Inactive'}
+          <div className="text-xs font-medium text-slate-200">
+            {config.enabled ? `${config.activeClients} active device${config.activeClients === 1 ? '' : 's'}` : 'Gateway Inactive'}
           </div>
         </div>
       </div>
 
-      {/* Sharing Details & QR Code Drawer */}
+      {/* Details & QR Code Drawer */}
       {config.enabled && (
-        <div className="bg-slate-950/40 border border-emerald-900/30 rounded-lg p-3.5 space-y-3">
+        <div className="bg-surface-1 border border-white/[0.06] rounded-lg p-3 space-y-3 text-xs">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-emerald-300/90 font-medium flex items-center gap-1.5">
-              <span>📱 Fast Mobile Device Setup</span>
+            <div className="text-[11px] text-slate-300 font-medium flex items-center gap-1.5">
+              <IconPhone size={13} className="text-emerald-400" />
+              <span>Mobile Device Setup</span>
             </div>
             <button
+              type="button"
               onClick={() => setShowQr(!showQr)}
-              className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-950/50 hover:bg-emerald-900/50 px-2.5 py-1 rounded border border-emerald-800/50 transition-colors"
+              className="text-[11px] text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/15 px-2.5 py-1 rounded-md border border-emerald-500/25 transition-colors flex items-center gap-1.5 cursor-pointer"
             >
-              {showQr ? 'Hide QR Code' : 'Scan QR Code'}
+              <IconQr size={12} />
+              <span>{showQr ? 'Hide QR Code' : 'Show QR Code'}</span>
             </button>
           </div>
 
           {showQr && (
-            <div className="flex flex-col items-center justify-center p-4 bg-slate-950/80 rounded-lg border border-slate-800">
+            <div className="flex flex-col items-center justify-center p-3.5 bg-surface-2 rounded-lg border border-white/[0.07]">
               {qrDataUrl ? (
-                <img src={qrDataUrl} alt="Proxy QR Code" className="w-36 h-36 rounded border border-slate-700 p-1 bg-[#090d16]" />
+                <img src={qrDataUrl} alt="Proxy QR Code" className="w-32 h-32 rounded-md border border-white/[0.1] p-1 bg-[#08090a]" />
               ) : (
-                <div className="w-36 h-36 flex items-center justify-center text-xs text-slate-500">Generating QR...</div>
+                <div className="w-32 h-32 flex items-center justify-center text-xs text-slate-500">Generating QR...</div>
               )}
               <div className="mt-2 text-center">
-                <p className="text-xs font-mono text-emerald-300">{proxyUrl}</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Scan or configure manual proxy in iOS / Android Wi-Fi settings</p>
+                <p className="text-xs font-mono text-emerald-400">{proxyUrl}</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">Scan to configure proxy URL in iOS / Android Wi-Fi settings</p>
               </div>
             </div>
           )}
 
-          <div className="text-[11px] text-slate-400 bg-slate-900/90 p-2.5 rounded border border-slate-800 space-y-1">
-            <div className="font-semibold text-slate-300">Quick Mobile Setup Guide:</div>
+          <div className="text-[11px] text-slate-400 bg-surface-2 p-2.5 rounded-md border border-white/[0.05] space-y-1">
+            <div className="font-semibold text-slate-300">Manual Configuration:</div>
             <div>
-              <span className="text-slate-200 font-medium">iPhone / iPad:</span> Settings &gt; Wi-Fi &gt; tap (i) &gt; Configure Proxy &gt; Manual &gt; Server: <span className="font-mono text-emerald-300">{localIp}</span>, Port: <span className="font-mono text-emerald-300">{httpPort}</span>
+              <span className="text-slate-300 font-medium">iOS:</span> Settings &gt; Wi-Fi &gt; Network (i) &gt; Configure Proxy &gt; Manual &gt; Server: <span className="font-mono text-emerald-400">{localIp}</span>, Port: <span className="font-mono text-emerald-400">{httpPort}</span>
             </div>
             <div>
-              <span className="text-slate-200 font-medium">Android:</span> Settings &gt; Wi-Fi &gt; Network Details &gt; Proxy &gt; Manual &gt; Host: <span className="font-mono text-emerald-300">{localIp}</span>, Port: <span className="font-mono text-emerald-300">{httpPort}</span>
+              <span className="text-slate-300 font-medium">Android:</span> Settings &gt; Wi-Fi &gt; Network Details &gt; Proxy &gt; Manual &gt; Host: <span className="font-mono text-emerald-400">{localIp}</span>, Port: <span className="font-mono text-emerald-400">{httpPort}</span>
             </div>
           </div>
         </div>

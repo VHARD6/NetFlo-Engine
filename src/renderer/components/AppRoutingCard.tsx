@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { AppRule, NetworkAdapter, DispatchMode } from '../../../shared/types';
+import { IconSplit, IconPlus, IconCross, IconTrash } from './Icons';
 
 interface AppRoutingCardProps {
   rules: AppRule[];
@@ -47,7 +48,6 @@ export function AppRoutingCard({
     const proc = (customProcess.trim() || selectedProcess).toLowerCase();
     if (!proc) return;
 
-    // Avoid duplicate rule for same process
     if (rules.some(r => r.processName.toLowerCase() === proc)) {
       return;
     }
@@ -102,45 +102,66 @@ export function AppRoutingCard({
   return (
     <div className="card space-y-3">
       <div className="flex items-center justify-between">
-        <div className="text-xs text-slate-500 uppercase tracking-wider font-medium flex items-center gap-1.5">
-          <span>⚡ Per-App Split Tunneling</span>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-md bg-white/[0.03] border border-white/[0.06] text-slate-400 flex items-center justify-center">
+            <IconSplit size={13} />
+          </div>
+          <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+            Per-App Split Tunneling
+          </span>
         </div>
+
         <button
+          type="button"
           onClick={() => setShowAddForm(!showAddForm)}
           disabled={disabled}
-          className="text-[11px] text-netflo-400 hover:text-netflo-300 font-medium transition-colors"
+          className="text-[11px] text-brand-400 hover:text-brand-300 font-medium transition-colors flex items-center gap-1 cursor-pointer"
         >
-          {showAddForm ? '✕ Close' : '+ Add Rule'}
+          {showAddForm ? (
+            <>
+              <IconCross size={11} />
+              <span>Cancel</span>
+            </>
+          ) : (
+            <>
+              <IconPlus size={11} />
+              <span>Add Rule</span>
+            </>
+          )}
         </button>
       </div>
 
       {/* Quick Presets */}
       <div className="flex gap-2">
         <button
+          type="button"
           onClick={() => applyPreset('gaming')}
           disabled={disabled}
-          className="btn-ghost flex-1 text-[11px] py-1 border border-slate-700/80 rounded"
+          className="btn-ghost flex-1 text-[11px] py-1 border border-white/[0.06] rounded-md font-medium"
         >
-          🎮 Gaming Preset
+          Gaming Preset (Discord / Steam / CS2)
         </button>
         <button
+          type="button"
           onClick={() => applyPreset('streaming')}
           disabled={disabled}
-          className="btn-ghost flex-1 text-[11px] py-1 border border-slate-700/80 rounded"
+          className="btn-ghost flex-1 text-[11px] py-1 border border-white/[0.06] rounded-md font-medium"
         >
-          🎥 Streaming Preset
+          Stream Preset (OBS Studio Pin)
         </button>
       </div>
 
       {/* Add rule dialog */}
       {showAddForm && (
-        <div className="bg-slate-800/80 p-2.5 rounded border border-slate-700/80 space-y-2 text-xs">
+        <div className="bg-surface-1 p-3 rounded-lg border border-white/[0.07] space-y-2.5 text-xs">
           <div>
-            <label className="text-[11px] text-slate-400 block mb-1">Select Running Application:</label>
+            <label className="text-[11px] text-slate-400 block mb-1 font-medium">
+              Select Running Process:
+            </label>
             <select
               value={selectedProcess}
               onChange={e => setSelectedProcess(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none"
+              className="w-full bg-surface-2 border border-white/[0.08] rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-brand-500/60 font-mono"
             >
               {runningApps.map(app => (
                 <option key={app} value={app}>
@@ -151,39 +172,45 @@ export function AppRoutingCard({
           </div>
 
           <div>
-            <label className="text-[11px] text-slate-400 block mb-1">Or type process name (e.g. game.exe):</label>
+            <label className="text-[11px] text-slate-400 block mb-1 font-medium">
+              Or Custom Executable Name:
+            </label>
             <input
               type="text"
               placeholder="e.g. valorant.exe"
               value={customProcess}
               onChange={e => setCustomProcess(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none"
+              className="w-full bg-surface-2 border border-white/[0.08] rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-brand-500/60 font-mono"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] text-slate-400 block mb-1">Route Mode:</label>
+              <label className="text-[11px] text-slate-400 block mb-1 font-medium">
+                Route Mode:
+              </label>
               <select
                 value={targetMode}
                 onChange={e => setTargetMode(e.target.value as DispatchMode)}
                 disabled={pinnedAdapter !== null}
-                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none"
+                className="w-full bg-surface-2 border border-white/[0.08] rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-brand-500/60 disabled:opacity-40"
               >
-                <option value="gaming">Gaming (Low Ping)</option>
+                <option value="gaming">Gaming (Lowest Ping)</option>
                 <option value="round-robin">Round-Robin (Aggregated)</option>
-                <option value="failover">Failover (Primary)</option>
+                <option value="failover">Failover (Primary Link)</option>
               </select>
             </div>
 
             <div>
-              <label className="text-[11px] text-slate-400 block mb-1">Pin to Adapter:</label>
+              <label className="text-[11px] text-slate-400 block mb-1 font-medium">
+                Pin to Specific Adapter:
+              </label>
               <select
                 value={pinnedAdapter ?? ''}
                 onChange={e => setPinnedAdapter(e.target.value ? parseInt(e.target.value, 10) : null)}
-                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none"
+                className="w-full bg-surface-2 border border-white/[0.08] rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-brand-500/60"
               >
-                <option value="">No Pin (Use Mode)</option>
+                <option value="">No Pin (Use Mode Algorithm)</option>
                 {adapters.map(a => (
                   <option key={a.ifIndex} value={a.ifIndex}>
                     {a.name}
@@ -194,19 +221,20 @@ export function AppRoutingCard({
           </div>
 
           <button
+            type="button"
             onClick={handleAddRule}
-            className="btn-primary w-full text-xs py-1 mt-1 font-medium"
+            className="btn-primary w-full text-xs py-1.5 mt-1 font-medium"
           >
-            Save Rule
+            Save Routing Rule
           </button>
         </div>
       )}
 
       {/* Rules list */}
-      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+      <div className="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
         {rules.length === 0 ? (
-          <div className="text-xs text-slate-500 text-center py-2">
-            No per-application rules configured
+          <div className="text-xs text-slate-500 text-center py-3 bg-surface-1 rounded-lg border border-white/[0.04]">
+            No application routing rules configured
           </div>
         ) : (
           rules.map(rule => {
@@ -217,42 +245,36 @@ export function AppRoutingCard({
             return (
               <div
                 key={rule.id}
-                className={`flex items-center justify-between p-2 rounded border text-xs transition-colors ${
+                className={`flex items-center justify-between p-2.5 rounded-lg border text-xs transition-colors ${
                   rule.enabled
-                    ? 'bg-slate-800/60 border-slate-700/60 text-slate-200'
-                    : 'bg-slate-900/40 border-slate-800 text-slate-500'
+                    ? 'bg-surface-1 border-white/[0.07] text-[#f7f8f8]'
+                    : 'bg-white/[0.01] border-white/[0.03] text-slate-500 opacity-60'
                 }`}
               >
-                <div className="min-w-0 pr-2">
-                  <div className="font-mono font-medium truncate">{rule.processName}</div>
-                  <div className="text-[11px] text-slate-400">
-                    {pinnedName ? `Pinned → ${pinnedName}` : `Mode → ${rule.mode ?? 'Default'}`}
-                  </div>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="font-mono text-xs font-medium text-slate-200 truncate">
+                    {rule.processName}
+                  </span>
+                  <span className="badge-purple text-[10px] py-0">
+                    {pinnedName ? `Pinned: ${pinnedName}` : rule.mode ?? 'Default'}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
                   <button
-                    role="switch"
-                    aria-checked={rule.enabled}
+                    type="button"
                     onClick={() => handleToggleRule(rule.id)}
-                    disabled={disabled}
-                    className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
-                      rule.enabled ? 'bg-netflo-600' : 'bg-slate-700'
-                    }`}
+                    className="text-[10px] text-slate-400 hover:text-slate-200 px-1.5 py-0.5 rounded border border-white/[0.08]"
                   >
-                    <span
-                      className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                        rule.enabled ? 'translate-x-3.5' : 'translate-x-0.5'
-                      }`}
-                    />
+                    {rule.enabled ? 'Enabled' : 'Disabled'}
                   </button>
                   <button
+                    type="button"
                     onClick={() => handleDeleteRule(rule.id)}
-                    disabled={disabled}
-                    className="text-slate-500 hover:text-rose-400 transition-colors text-xs"
-                    title="Remove rule"
+                    className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
+                    title="Delete rule"
                   >
-                    ✕
+                    <IconTrash size={12} />
                   </button>
                 </div>
               </div>

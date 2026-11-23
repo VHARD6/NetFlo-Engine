@@ -1,5 +1,6 @@
 import React from 'react';
 import type { DispatchMode } from '../../../shared/types';
+import { IconLayers, IconShield, IconActivity } from './Icons';
 
 interface ModeSelectorProps {
   mode: DispatchMode;
@@ -10,7 +11,7 @@ interface ModeSelectorProps {
 interface ModeOption {
   value: DispatchMode;
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   description: string;
 }
 
@@ -18,55 +19,81 @@ const MODES: ModeOption[] = [
   {
     value: 'round-robin',
     label: 'Round-Robin',
-    icon: '⚖️',
-    description: 'Spread all connections evenly across adapters',
+    icon: <IconLayers size={15} />,
+    description: 'Distributes TCP streams evenly across all bonded interfaces',
   },
   {
     value: 'failover',
-    label: 'Failover',
-    icon: '🛡️',
-    description: 'Use primary adapter; switch to backup if it fails',
+    label: 'Failover Shield',
+    icon: <IconShield size={15} />,
+    description: 'Directs traffic via primary adapter; hot-swaps to backup on loss',
   },
   {
     value: 'gaming',
-    label: 'Gaming Mode',
-    icon: '🎮',
-    description: 'Bond downloads (HTTP/S), pin game UDP to fastest adapter',
+    label: 'Gaming & Low-Latency',
+    icon: <IconActivity size={15} />,
+    description: 'Aggregates bulk downloads while pinning UDP/games to lowest ping',
   },
 ];
 
 export function ModeSelector({ mode, onChange, disabled }: ModeSelectorProps) {
   return (
-    <div className="card space-y-2">
-      <div className="text-xs text-slate-500 uppercase tracking-wider font-medium">
-        Bonding Mode
+    <div className="card space-y-2.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+          Bonding Algorithm
+        </span>
+        <span className="text-[10px] text-slate-500 font-mono">
+          Layer 4 Dispatch
+        </span>
       </div>
+
       <div className="space-y-1.5">
-        {MODES.map(opt => (
-          <button
-            key={opt.value}
-            onClick={() => onChange(opt.value)}
-            disabled={disabled}
-            className={`
-              w-full text-left rounded-lg px-3 py-2.5 transition-all duration-150
-              border flex items-start gap-3
-              disabled:opacity-40 disabled:cursor-not-allowed
-              ${mode === opt.value
-                ? 'bg-netflo-600/20 border-netflo-500/50 text-netflo-300'
-                : 'bg-slate-700/30 border-slate-700/40 text-slate-400 hover:bg-slate-700/60 hover:text-slate-200'
-              }
-            `}
-          >
-            <span className="text-lg shrink-0 mt-0.5">{opt.icon}</span>
-            <div className="min-w-0">
-              <div className="text-sm font-medium">{opt.label}</div>
-              <div className="text-xs opacity-70 mt-0.5">{opt.description}</div>
-            </div>
-            {mode === opt.value && (
-              <span className="ml-auto shrink-0 text-netflo-400 mt-0.5">●</span>
-            )}
-          </button>
-        ))}
+        {MODES.map(opt => {
+          const isSelected = mode === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange(opt.value)}
+              disabled={disabled}
+              className={`
+                w-full text-left rounded-lg p-2.5 transition-all duration-150 border
+                flex items-start gap-2.5 disabled:opacity-40 disabled:cursor-not-allowed
+                ${isSelected
+                  ? 'bg-brand-500/10 border-brand-500/40 text-[#f7f8f8]'
+                  : 'bg-surface-1 border-white/[0.05] text-slate-400 hover:bg-white/[0.03] hover:text-slate-200 hover:border-white/[0.09]'
+                }
+              `}
+            >
+              <div
+                className={`
+                  w-6 h-6 rounded-md flex items-center justify-center shrink-0 mt-0.5 border
+                  ${isSelected
+                    ? 'bg-brand-500 text-white border-brand-400/50'
+                    : 'bg-white/[0.03] text-slate-400 border-white/[0.06]'
+                  }
+                `}
+              >
+                {opt.icon}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs font-medium ${isSelected ? 'text-[#f7f8f8]' : 'text-slate-300'}`}>
+                    {opt.label}
+                  </span>
+                  {isSelected && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-400" />
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                  {opt.description}
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
