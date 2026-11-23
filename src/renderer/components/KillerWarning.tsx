@@ -8,26 +8,28 @@ interface KillerWarningProps {
 
 export function KillerWarning({ services, onOpenSettings }: KillerWarningProps) {
   return (
-    <div className="rounded-[10px] border border-amber-500/30 bg-amber-500/[0.08] p-3 space-y-2">
-      <div className="flex items-center gap-2">
-        <IconAlert size={15} className="text-amber-400 shrink-0" />
-        <div className="text-xs font-semibold text-amber-300">
-          Intel Killer Prioritization Engine Detected
+    <div className="border-b border-amber-500/25 bg-amber-500/[0.06] px-4 py-2.5 flex items-center justify-between gap-4 text-xs">
+      <div className="flex items-start gap-2.5 min-w-0">
+        <IconAlert size={14} className="text-amber-400 shrink-0 mt-0.5" />
+        <div className="min-w-0">
+          <span className="font-semibold text-amber-200">
+            Intel Killer Prioritization Engine Detected
+          </span>
+          <span className="text-amber-300/80 ml-2">
+            Forces all streams onto a single adapter. Disable "Prioritization Engine" in Killer Control Center.
+          </span>
+          <span className="text-[10px] text-amber-400/60 font-mono ml-2">
+            ({services.join(', ')})
+          </span>
         </div>
       </div>
-      <div className="text-[11px] text-amber-200/80 leading-relaxed">
-        The Killer Network Service overrides Windows sockets and forces streams to a single adapter, preventing bonding. Disable{' '}
-        <span className="text-amber-300 font-medium">"Prioritization Engine"</span> in Killer Control Center.
-      </div>
-      <div className="text-[10px] text-amber-400/70 font-mono">
-        Active services: {services.join(', ')}
-      </div>
+
       <button
         type="button"
         onClick={onOpenSettings}
-        className="w-full text-xs py-1.5 px-3 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-md font-medium transition-colors cursor-pointer"
+        className="text-[11px] font-medium text-amber-300 hover:text-amber-100 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 px-2.5 py-1 rounded transition-colors shrink-0"
       >
-        Open Killer Control Center
+        Open Killer Control
       </button>
     </div>
   );

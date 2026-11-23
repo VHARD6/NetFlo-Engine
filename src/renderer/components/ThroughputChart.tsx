@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -15,11 +15,11 @@ interface DataPoint {
 }
 
 const COLORS = [
-  '#5e6ad2', // Linear purple
-  '#38bdf8', // electric cyan
-  '#10b981', // emerald
-  '#f59e0b', // amber
-  '#f43f5e', // rose
+  '#6366f1', // Electric Indigo
+  '#38bdf8', // Electric Sky
+  '#10b981', // Emerald
+  '#f59e0b', // Amber
+  '#ec4899', // Pink
 ];
 
 const MAX_POINTS = 60; // 30 seconds of history at 500ms intervals
@@ -54,22 +54,22 @@ export function ThroughputChart({ adapters, stats }: ThroughputChartProps) {
 
   if (activeAdapters.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-slate-500 text-xs font-mono">
-        Waiting for active bonded connections...
+      <div className="flex h-full items-center justify-center text-zinc-600 text-xs font-mono">
+        Waiting for active bonded streams...
       </div>
     );
   }
 
   return (
-    <div className="h-full">
+    <div className="h-full w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={history} margin={{ top: 8, right: 12, bottom: 0, left: -10 }}>
+        <AreaChart data={history} margin={{ top: 6, right: 8, bottom: 0, left: -20 }}>
           <defs>
             {activeAdapters.map((adapter, i) => (
               <React.Fragment key={adapter.ifIndex}>
                 <linearGradient id={`grad_rx_${adapter.ifIndex}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.25} />
-                  <stop offset="95%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.0} />
+                  <stop offset="0%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.28} />
+                  <stop offset="100%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.0} />
                 </linearGradient>
               </React.Fragment>
             ))}
@@ -78,19 +78,21 @@ export function ThroughputChart({ adapters, stats }: ThroughputChartProps) {
           <XAxis dataKey="t" hide />
           <YAxis
             tickFormatter={formatBps}
-            tick={{ fontSize: 10, fill: '#64748b' }}
-            width={52}
+            tick={{ fontSize: 9, fill: '#71717a', fontFamily: 'monospace' }}
+            width={44}
             tickLine={false}
             axisLine={false}
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: '#15161b',
+              backgroundColor: '#0e1017',
               border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: 6,
+              borderRadius: 4,
               fontSize: 11,
-              color: '#f7f8f8',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+              fontFamily: 'monospace',
+              color: '#f4f4f5',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
+              padding: '6px 10px',
             }}
             labelFormatter={() => ''}
             formatter={(value: number, name: string) => [
@@ -100,11 +102,11 @@ export function ThroughputChart({ adapters, stats }: ThroughputChartProps) {
           />
           <Legend
             formatter={(value) => (
-              <span className="text-[11px] text-slate-400 font-mono">
+              <span className="text-[10px] text-zinc-400 font-mono">
                 {value.replace('_rx', ' (Down)').replace('_tx', ' (Up)')}
               </span>
             )}
-            wrapperStyle={{ fontSize: 11, paddingTop: 6 }}
+            wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
           />
 
           {activeAdapters.map((adapter, i) => (
@@ -114,7 +116,7 @@ export function ThroughputChart({ adapters, stats }: ThroughputChartProps) {
               dataKey={`${adapter.name}_rx`}
               name={`${adapter.name}_rx`}
               stroke={COLORS[i % COLORS.length]}
-              strokeWidth={1.75}
+              strokeWidth={1.5}
               fill={`url(#grad_rx_${adapter.ifIndex})`}
               dot={false}
               isAnimationActive={false}

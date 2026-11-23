@@ -18,58 +18,37 @@ export const BridgeCard: React.FC<BridgeCardProps> = ({ bridge, isRunning }) => 
   };
 
   return (
-    <div className="card space-y-3.5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/25 flex items-center justify-center text-brand-400">
-            <IconBridge size={15} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-xs font-semibold text-[#f7f8f8]">Download Manager Bridge</h3>
-              <span className="badge-purple text-[10px] py-0 px-1.5">IPC API</span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Inter-process API allowing NetFlo Download Manager to coordinate multi-chunk stream aggregation.
-            </p>
-          </div>
-        </div>
-
-        <div className="text-right">
-          <span
-            className={`badge text-[11px] font-mono ${
-              isRunning ? 'badge-green' : 'badge-gray'
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${isRunning ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-            {isRunning ? `127.0.0.1:${bridge.port}` : 'Bridge Idle'}
-          </span>
-        </div>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between pb-1">
+        <span className="section-label">Download Manager Bridge API</span>
+        <span className={isRunning ? 'badge-green text-[10px]' : 'badge-gray text-[10px]'}>
+          {isRunning ? `127.0.0.1:${bridge.port}` : 'Bridge Idle'}
+        </span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
-        <div className="p-2.5 bg-surface-1 border border-white/[0.06] rounded-lg text-slate-300 flex justify-between items-center">
-          <span className="text-[11px] text-slate-400">Bridge Endpoint:</span>
-          <div className="flex items-center gap-1.5">
-            <span className="font-mono text-brand-300 text-[11px]">{endpoint}</span>
-            <button
-              type="button"
-              onClick={copyEndpoint}
-              className="text-slate-400 hover:text-slate-200 transition-colors p-0.5 cursor-pointer"
-              title="Copy endpoint"
-            >
-              {copied ? <IconCheck size={11} className="text-emerald-400" /> : <IconCopy size={11} />}
-            </button>
+      <div className="py-3 px-3 border-y border-white/[0.06] flex items-center justify-between gap-4 interactive-row text-xs">
+        <div className="min-w-0 flex-1">
+          <div className="text-xs font-semibold text-zinc-100">
+            Local Multi-Stream Aggregation IPC
           </div>
+          <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
+            REST API endpoint allowing NetFlo Download Manager or browser extensions to coordinate parallel chunk
+            streams across multiple bonded interfaces.
+          </p>
         </div>
 
-        <div className="p-2.5 bg-surface-1 border border-white/[0.06] rounded-lg text-slate-300 flex justify-between items-center">
-          <span className="text-[11px] text-slate-400">Sync Status:</span>
-          <span className="text-[11px] font-medium text-slate-200">
-            {bridge.connectedClients > 0
-              ? `${bridge.connectedClients} Download Client(s) Synced`
-              : 'Waiting for Download Manager link'}
+        <div className="flex items-center gap-2 font-mono text-xs shrink-0">
+          <span className="text-zinc-400 bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06]">
+            {endpoint}
           </span>
+          <button
+            type="button"
+            onClick={copyEndpoint}
+            className="text-zinc-500 hover:text-zinc-300 p-1"
+            title="Copy API endpoint"
+          >
+            {copied ? <IconCheck size={12} className="text-emerald-400" /> : <IconCopy size={12} />}
+          </button>
         </div>
       </div>
     </div>

@@ -23,11 +23,12 @@ function formatDataSize(bytes: number): string {
 }
 
 const PRESET_OPTIONS = [
-  { label: 'None', bytes: null },
+  { label: 'No Cap', bytes: null },
   { label: '500 MB', bytes: 500 * 1024 * 1024 },
   { label: '1 GB', bytes: 1024 * 1024 * 1024 },
   { label: '2 GB', bytes: 2 * 1024 * 1024 * 1024 },
   { label: '5 GB', bytes: 5 * 1024 * 1024 * 1024 },
+  { label: '10 GB', bytes: 10 * 1024 * 1024 * 1024 },
 ];
 
 export function QuotaCard({
@@ -37,11 +38,11 @@ export function QuotaCard({
   onResetQuota,
   disabled,
 }: QuotaCardProps) {
+  const activeAdapters = adapters.filter(a => a.status === 'connected');
   const [selectedIfIndex, setSelectedIfIndex] = useState<number>(
     adapters[0]?.ifIndex ?? 0
   );
 
-  const activeAdapters = adapters.filter(a => a.status === 'connected');
   const currentAdapter =
     adapters.find(a => a.ifIndex === selectedIfIndex) || activeAdapters[0];
   const quota = currentAdapter
@@ -62,174 +63,127 @@ export function QuotaCard({
   const barColor = isExceeded
     ? 'bg-rose-500'
     : isWarning
-    ? 'bg-amber-500'
+    ? 'bg-amber-400'
     : 'bg-brand-500';
 
   return (
-    <div className="card space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-white/[0.03] border border-white/[0.06] text-slate-400 flex items-center justify-center">
-            <IconGauge size={13} />
-          </div>
-          <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
-            Data Quota & Budget Guard
-          </span>
-        </div>
-
-        {quota && (
-          <button
-            type="button"
-            onClick={() => onResetQuota(quota.ifIndex)}
-            disabled={disabled}
-            title="Reset today's usage counter"
-            className="text-[11px] text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
-          >
-            <IconRefresh size={11} />
-            <span>Reset Counter</span>
-          </button>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between pb-1">
+        <span className="section-label">Metered Data Quota & Budget Guard</span>
+        {quota && isExceeded && (
+          <span className="badge-red text-[10px]">Quota Cap Exceeded</span>
+        )}
+        {quota && isWarning && !isExceeded && (
+          <span className="badge-yellow text-[10px]">80% Threshold Reached</span>
         )}
       </div>
 
-      {activeAdapters.length === 0 ? (
-        <div className="text-xs text-slate-500 text-center py-3 bg-surface-1 rounded-lg border border-white/[0.04]">
-          No active interfaces to meter
+      {/* Adapter selector pills */}
+      <div className="flex flex-wrap gap-1.5">
+        {adapters.map(adapter => {
+          const isSelected = (currentAdapter?.ifIndex ?? 0) === adapter.ifIndex;
+          const q = quotas.find(x => x.ifIndex === adapter.ifIndex);
+          return (
+            <button
+              key={adapter.ifIndex}
+              type="button"
+              onClick={() => setSelectedIfIndex(adapter.ifIndex)}
+              className={`
+                px-2.5 py-1 rounded text-xs font-mono transition-colors cursor-pointer border
+                ${isSelected
+                  ? 'bg-white/[0.08] text-white border-white/[0.15]'
+                  : 'bg-transparent text-zinc-500 hover:text-zinc-300 border-white/[0.05]'
+                }
+              `}
+            >
+              <span>{adapter.name}</span>
+              {q?.dailyCapBytes && (
+                <span className="ml-1.5 text-[10px] text-zinc-500">
+                  ({formatDataSize(q.usedTodayBytes)} / {formatDataSize(q.dailyCapBytes)})
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {currentAdapter ? (
+        <div className="border-t border-white/[0.06] pt-3 space-y-3">
+          {/* Usage typography and progress line */}
+          <div>
+            <div className="flex items-baseline justify-between mb-1.5">
+              <div className="text-base font-mono font-semibold text-zinc-100">
+                {formatDataSize(usedBytes)}{' '}
+                <span className="text-xs font-normal text-zinc-500">
+                  {capBytes ? `of ${formatDataSize(capBytes)} daily limit` : '(No daily limit)'}
+                </span>
+              </div>
+              {capBytes && (
+                <div className="text-xs font-mono text-zinc-400">
+                  {percentUsed}%
+                </div>
+              )}
+            </div>
+
+            {/* Hairline Progress Bar */}
+            <div className="w-full h-1.5 bg-zinc-800/80 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-300 rounded-full ${barColor}`}
+                style={{ width: `${capBytes ? percentUsed : 0}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Quick preset limits */}
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] text-zinc-500 mr-1">Daily Cap:</span>
+              {PRESET_OPTIONS.map(opt => {
+                const isActive = (quota?.dailyCapBytes ?? null) === opt.bytes;
+                return (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() =>
+                      onSetQuota(
+                        currentAdapter.ifIndex,
+                        currentAdapter.name,
+                        opt.bytes,
+                        'disconnect',
+                        80
+                      )
+                    }
+                    className={`
+                      px-2 py-0.5 rounded text-[11px] font-mono transition-colors cursor-pointer border
+                      ${isActive
+                        ? 'bg-brand-500/20 text-brand-300 border-brand-500/40'
+                        : 'bg-white/[0.02] text-zinc-400 hover:text-zinc-200 border-white/[0.06]'
+                      }
+                    `}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              disabled={disabled || usedBytes === 0}
+              onClick={() => onResetQuota(currentAdapter.ifIndex)}
+              className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-30"
+              title="Reset today's usage accumulator"
+            >
+              <IconRefresh size={11} />
+              <span>Reset Counter</span>
+            </button>
+          </div>
         </div>
       ) : (
-        <>
-          {/* Adapter tabs */}
-          {activeAdapters.length > 1 && (
-            <div className="flex gap-1 overflow-x-auto pb-1 text-xs">
-              {activeAdapters.map(a => (
-                <button
-                  key={a.ifIndex}
-                  type="button"
-                  onClick={() => setSelectedIfIndex(a.ifIndex)}
-                  className={`px-2.5 py-1 rounded-md text-[11px] transition-all duration-150 shrink-0 font-medium ${
-                    currentAdapter?.ifIndex === a.ifIndex
-                      ? 'bg-brand-500/15 text-brand-300 border border-brand-500/30'
-                      : 'text-slate-400 hover:text-slate-200 bg-white/[0.02] border border-transparent'
-                  }`}
-                >
-                  {a.name}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {currentAdapter && (
-            <div className="space-y-2.5 bg-surface-1 p-3 rounded-lg border border-white/[0.05]">
-              {/* Progress and status */}
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[#f7f8f8] font-mono font-medium">
-                  {formatDataSize(usedBytes)}
-                  <span className="text-slate-500 font-sans ml-1">
-                    {capBytes ? `/ ${formatDataSize(capBytes)}` : 'used today'}
-                  </span>
-                </span>
-                <span
-                  className={
-                    isExceeded
-                      ? 'badge-red text-[10px] py-0'
-                      : isWarning
-                      ? 'badge-yellow text-[10px] py-0'
-                      : 'badge-gray text-[10px] py-0 font-mono'
-                  }
-                >
-                  {capBytes ? `${percentUsed}% used` : 'No Cap'}
-                </span>
-              </div>
-
-              {/* Progress bar */}
-              {capBytes && (
-                <div className="w-full bg-surface-3 rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-300 ${barColor}`}
-                    style={{ width: `${percentUsed}%` }}
-                  />
-                </div>
-              )}
-
-              {/* Presets */}
-              <div className="space-y-1.5 pt-1">
-                <span className="text-[11px] text-slate-500">Daily Cap Presets:</span>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {PRESET_OPTIONS.map(opt => {
-                    const isSelected = capBytes === opt.bytes;
-                    return (
-                      <button
-                        key={opt.label}
-                        type="button"
-                        onClick={() =>
-                          onSetQuota(
-                            currentAdapter.ifIndex,
-                            currentAdapter.name,
-                            opt.bytes,
-                            quota?.actionOnExceed ?? 'disconnect',
-                            quota?.warningThresholdPercent ?? 80
-                          )
-                        }
-                        disabled={disabled}
-                        className={`py-1 text-[11px] rounded-md text-center transition-all duration-150 font-medium ${
-                          isSelected
-                            ? 'bg-brand-500 text-white shadow-sm'
-                            : 'bg-white/[0.03] text-slate-400 hover:text-slate-200 hover:bg-white/[0.06] border border-white/[0.05]'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Action when exceeded */}
-              {capBytes && (
-                <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-white/[0.04]">
-                  <span className="text-slate-500">Action on limit reach:</span>
-                  <div className="flex gap-2">
-                    <label className="flex items-center gap-1 text-slate-300 cursor-pointer">
-                      <input
-                        type="radio"
-                        name={`action_${currentAdapter.ifIndex}`}
-                        checked={(quota?.actionOnExceed ?? 'disconnect') === 'disconnect'}
-                        onChange={() =>
-                          onSetQuota(
-                            currentAdapter.ifIndex,
-                            currentAdapter.name,
-                            capBytes,
-                            'disconnect',
-                            quota?.warningThresholdPercent ?? 80
-                          )
-                        }
-                        className="accent-brand-500"
-                      />
-                      <span>Disconnect link</span>
-                    </label>
-                    <label className="flex items-center gap-1 text-slate-400 cursor-pointer">
-                      <input
-                        type="radio"
-                        name={`action_${currentAdapter.ifIndex}`}
-                        checked={quota?.actionOnExceed === 'notify-only'}
-                        onChange={() =>
-                          onSetQuota(
-                            currentAdapter.ifIndex,
-                            currentAdapter.name,
-                            capBytes,
-                            'notify-only',
-                            quota?.warningThresholdPercent ?? 80
-                          )
-                        }
-                        className="accent-brand-500"
-                      />
-                      <span>Notify only</span>
-                    </label>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </>
+        <div className="text-xs text-zinc-500 py-4 font-mono">
+          Select an adapter above to configure daily data limits.
+        </div>
       )}
     </div>
   );
