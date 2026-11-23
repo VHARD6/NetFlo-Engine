@@ -72,6 +72,31 @@ export interface AutoTurboConfig {
   secondaryAdapterIndex: number | null; // tethering adapter on standby
 }
 
+export interface LanGatewayConfig {
+  enabled: boolean;
+  bindHost: string; // '127.0.0.1' or '0.0.0.0'
+  socksPort: number; // default 1080
+  httpPort: number;  // default 8080
+  allowedSubnetsOnly: boolean; // default true (RFC1918 private IPs only)
+  localIp: string;
+  activeClients: number;
+}
+
+export interface TetherAssistantState {
+  detected: boolean;
+  adapterName?: string;
+  ifIndex?: number;
+  status: 'idle' | 'detected' | 'optimized' | 'error';
+  lastOptimizedTime?: number;
+  wcmProtected: boolean;
+}
+
+export interface BridgeState {
+  enabled: boolean;
+  port: number; // 1088
+  connectedClients: number;
+}
+
 export interface NetFloState {
   status: NetFloStatus;
   mode: DispatchMode;
@@ -101,6 +126,12 @@ export interface NetFloState {
   portRules: PortRule[];
   /** Dynamic congestion assist & auto-turbo configuration */
   autoTurbo: AutoTurboConfig;
+  /** LAN Gateway & Hotspot Share */
+  lanGateway: LanGatewayConfig;
+  /** One-Click Phone Tether Assistant */
+  tetherAssistant: TetherAssistantState;
+  /** Local IPC Bridge to Download Manager */
+  bridge: BridgeState;
 }
 
 export interface AppRule {
@@ -154,6 +185,8 @@ export const IPC = {
   SET_PORT_RULES: 'netflo:set-port-rules',
   GET_RUNNING_APPS: 'netflo:get-running-apps',
   SET_AUTO_TURBO: 'netflo:set-auto-turbo',
+  SET_LAN_GATEWAY: 'netflo:set-lan-gateway',
+  OPTIMIZE_TETHER: 'netflo:optimize-tether',
 } as const;
 
 

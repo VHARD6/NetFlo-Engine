@@ -10,6 +10,9 @@ import { QuotaCard } from './components/QuotaCard';
 import { SafeguardsCard } from './components/SafeguardsCard';
 import { AppRoutingCard } from './components/AppRoutingCard';
 import { AutoTurboCard } from './components/AutoTurboCard';
+import { LanGatewayCard } from './components/LanGatewayCard';
+import { TetherAssistantCard } from './components/TetherAssistantCard';
+import { BridgeCard } from './components/BridgeCard';
 
 export default function App() {
   const {
@@ -32,6 +35,8 @@ export default function App() {
     setAppRules,
     getRunningApps,
     setAutoTurbo,
+    setLanGateway,
+    optimizeTether,
     isRunning,
     isStopped,
   } = useNetFlo();
@@ -134,6 +139,26 @@ export default function App() {
             onUpdateRules={setAppRules}
             onGetRunningApps={getRunningApps}
             disabled={!isRunning}
+          />
+
+          {/* LAN Gateway & Hotspot Share */}
+          <LanGatewayCard
+            config={state.lanGateway}
+            onUpdate={setLanGateway}
+            isRunning={isRunning}
+          />
+
+          {/* One-Click Phone Tether Assistant */}
+          <TetherAssistantCard
+            state={state.tetherAssistant}
+            onOptimize={optimizeTether}
+            isRunning={isRunning}
+          />
+
+          {/* NetFlo Download Manager Bridge */}
+          <BridgeCard
+            bridge={state.bridge}
+            isRunning={isRunning}
           />
 
           {/* System-wide Routing Switches */}

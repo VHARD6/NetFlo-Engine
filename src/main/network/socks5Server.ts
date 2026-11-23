@@ -25,6 +25,7 @@ import type { ConnectionPool } from './connectionPool';
 import type { NetworkAdapter, DispatchMode, AppRule, PortRule, AutoTurboConfig } from '../../shared/types';
 import { chooseAdapter, isMeetingTraffic } from './dispatcher';
 import { appDetector } from './appDetector';
+import { isPrivateSubnet } from './subnetCheck';
 
 // ─── SOCKS5 Constants ────────────────────────────────────────
 const SOCKS5_VERSION    = 0x05;
@@ -41,7 +42,9 @@ const REP_HOST_UNREACH  = 0x04;
 
 export class Socks5Server extends EventEmitter {
   private server: net.Server | null = null;
-  public readonly port: number;
+  public port: number;
+  public bindHost: string;
+  public allowedSubnetsOnly: boolean;
   private pool: ConnectionPool;
   private adapters: NetworkAdapter[] = [];
   private mode: DispatchMode = 'round-robin';
@@ -57,11 +60,14 @@ export class Socks5Server extends EventEmitter {
     highLatencyThresholdMs: 150,
     secondaryAdapterIndex: null,
   };
+  private activeClients = new Set<string>();
 
-  constructor(pool: ConnectionPool, port = 1080) {
+  constructor(pool: ConnectionPool, port = 1080, bindHost = '127.0.0.1', allowedSubnetsOnly = true) {
     super();
     this.pool = pool;
     this.port = port;
+    this.bindHost = bindHost;
+    this.allowedSubnetsOnly = allowedSubnetsOnly;
   }
 
   updateAdapters(adapters: NetworkAdapter[], mode: DispatchMode): void {
@@ -83,15 +89,23 @@ export class Socks5Server extends EventEmitter {
     this.adapterPings = pings;
   }
 
+  getActiveClientCount(): number {
+    return this.activeClients.size;
+  }
 
+  async start(port = this.port, bindHost = this.bindHost): Promise<void> {
+    if (this.server) {
+      await this.stop();
+    }
+    this.port = port;
+    this.bindHost = bindHost;
 
-  start(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.server = net.createServer(socket => this.handleClient(socket));
 
       this.server.once('error', reject);
-      this.server.listen(this.port, '127.0.0.1', () => {
-        this.emit('log', `[SOCKS5] Listening on 127.0.0.1:${this.port}`);
+      this.server.listen(this.port, this.bindHost, () => {
+        this.emit('log', `[SOCKS5] Listening on ${this.bindHost}:${this.port}`);
         resolve();
       });
     });
@@ -102,6 +116,7 @@ export class Socks5Server extends EventEmitter {
       if (!this.server) return resolve();
       this.server.close(() => {
         this.server = null;
+        this.activeClients.clear();
         resolve();
       });
     });
@@ -109,6 +124,20 @@ export class Socks5Server extends EventEmitter {
 
   private async handleClient(client: net.Socket): Promise<void> {
     client.on('error', () => {}); // suppress unhandled errors
+
+    const clientIp = client.remoteAddress ?? '';
+    if (this.allowedSubnetsOnly && !isPrivateSubnet(clientIp)) {
+      this.emit('log', `[SOCKS5] 🛑 Rejected external connection from ${clientIp}`);
+      client.destroy();
+      return;
+    }
+
+    if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
+      if (!this.activeClients.has(clientIp)) {
+        this.activeClients.add(clientIp);
+        this.emit('client-connected', clientIp, this.activeClients.size);
+      }
+    }
 
     try {
       // ── Step 1: Greeting ────────────────────────────────

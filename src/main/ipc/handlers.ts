@@ -123,6 +123,17 @@ export function setupIpcHandlers(
     engine.setAutoTurbo(config);
     return engine.getState();
   });
+
+  // ── Phase 3: LAN Gateway & Tether Assistant ──────────────
+  ipcMain.handle(IPC.SET_LAN_GATEWAY, async (_event, config: any) => {
+    await engine.setLanGateway(config);
+    return engine.getState();
+  });
+
+  ipcMain.handle(IPC.OPTIMIZE_TETHER, () => {
+    engine.optimizeTether();
+    return engine.getState();
+  });
 }
 
 

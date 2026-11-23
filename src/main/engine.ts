@@ -12,14 +12,18 @@
  */
 
 import { EventEmitter } from 'events';
+import os from 'os';
 import { BrowserWindow, powerMonitor } from 'electron';
 import { getAdapters, detectKillerServices } from './network/interfaces';
 import { ConnectionPool } from './network/connectionPool';
 import { Socks5Server } from './network/socks5Server';
+import { HttpProxyServer } from './network/httpProxyServer';
+import { BridgeServer } from './network/bridgeServer';
 import { pingAllAdapters } from './network/pinger';
 import { applyWcmFix } from './fixes/wcmFix';
 import { fixUsbTetherMetrics } from './fixes/metricFix';
 import { detectKillerSuite } from './fixes/killerDetect';
+import { tetherAssistant } from './fixes/tetherAssistant';
 import { resetRoundRobin } from './network/dispatcher';
 import { enableSystemProxy, disableSystemProxy, isSystemProxyEnabled } from './network/systemProxy';
 import { WintunAdapter } from './network/wintun';
@@ -34,10 +38,14 @@ import type {
   AppRule,
   PortRule,
   AutoTurboConfig,
+  LanGatewayConfig,
+  TetherAssistantState,
 } from '../shared/types';
 import { IPC } from '../shared/types';
 
 const SOCKS5_PORT = 1080;
+const HTTP_PROXY_PORT = 8080;
+const BRIDGE_PORT = 1088;
 const ADAPTER_POLL_INTERVAL_NORMAL_MS = 3000;
 const STATS_PUSH_INTERVAL_NORMAL_MS = 500;
 const PING_INTERVAL_NORMAL_MS = 10_000;
@@ -46,9 +54,32 @@ const ADAPTER_POLL_INTERVAL_POWERSAVE_MS = 6000;
 const STATS_PUSH_INTERVAL_POWERSAVE_MS = 1500;
 const PING_INTERVAL_POWERSAVE_MS = 30_000;
 
+function getPrimaryLocalIp(adapters: NetworkAdapter[]): string {
+  for (const a of adapters) {
+    if (a.status === 'connected' && a.ipv4 && !a.ipv4.startsWith('127.')) {
+      return a.ipv4;
+    }
+  }
+  try {
+    const ifaces = os.networkInterfaces();
+    for (const name of Object.keys(ifaces)) {
+      for (const info of ifaces[name] || []) {
+        if (info.family === 'IPv4' && !info.internal) {
+          return info.address;
+        }
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return '127.0.0.1';
+}
+
 export class NetFloEngine extends EventEmitter {
   private pool: ConnectionPool;
   private socksServer: Socks5Server;
+  private httpProxyServer: HttpProxyServer;
+  private bridgeServer: BridgeServer;
   private wintun: WintunAdapter | null = null;
   private mainWindow: BrowserWindow | null = null;
   private quotaManager: QuotaManager;
@@ -62,7 +93,9 @@ export class NetFloEngine extends EventEmitter {
     super();
     this.quotaManager = new QuotaManager();
     this.pool = new ConnectionPool();
-    this.socksServer = new Socks5Server(this.pool, SOCKS5_PORT);
+    this.socksServer = new Socks5Server(this.pool, SOCKS5_PORT, '127.0.0.1', true);
+    this.httpProxyServer = new HttpProxyServer(this.pool, HTTP_PROXY_PORT, '127.0.0.1', true);
+    this.bridgeServer = new BridgeServer(this, BRIDGE_PORT);
 
     this.state = {
       status: 'stopped',
@@ -92,14 +125,57 @@ export class NetFloEngine extends EventEmitter {
         highLatencyThresholdMs: 150,
         secondaryAdapterIndex: null,
       },
+      lanGateway: {
+        enabled: false,
+        bindHost: '127.0.0.1',
+        socksPort: SOCKS5_PORT,
+        httpPort: HTTP_PROXY_PORT,
+        allowedSubnetsOnly: true,
+        localIp: '127.0.0.1',
+        activeClients: 0,
+      },
+      tetherAssistant: {
+        detected: false,
+        status: 'idle',
+        wcmProtected: false,
+      },
+      bridge: {
+        enabled: true,
+        port: BRIDGE_PORT,
+        connectedClients: 0,
+      },
     };
 
     this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
+    this.httpProxyServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
 
     this.socksServer.on('log', (msg: string) => this.log(msg));
     this.socksServer.on('meeting-protected', () => {
       this.state.protectedMeetingCount++;
       this.pushState();
+    });
+    this.socksServer.on('client-connected', () => {
+      this.state.lanGateway.activeClients = this.socksServer.getActiveClientCount() + this.httpProxyServer.getActiveClientCount();
+      this.pushState();
+    });
+
+    this.httpProxyServer.on('log', (msg: string) => this.log(msg));
+    this.httpProxyServer.on('meeting-protected', () => {
+      this.state.protectedMeetingCount++;
+      this.pushState();
+    });
+    this.httpProxyServer.on('client-connected', () => {
+      this.state.lanGateway.activeClients = this.socksServer.getActiveClientCount() + this.httpProxyServer.getActiveClientCount();
+      this.pushState();
+    });
+
+    this.bridgeServer.on('log', (msg: string) => this.log(msg));
+
+    tetherAssistant.on('log', (msg: string) => this.log(msg));
+    tetherAssistant.on('tether-optimized', (adapter: NetworkAdapter) => {
+      this.state.tetherAssistant = tetherAssistant.getState();
+      this.pushState();
+      this.log(`[Tether Assistant] ⚡ Auto-optimized tether adapter "${adapter.name}" with metric 9999`);
     });
 
     // Wire quota tracking to connection pool byte counts
@@ -135,7 +211,6 @@ export class NetFloEngine extends EventEmitter {
   }
 
   getState(): NetFloState {
-
     return { ...this.state };
   }
 
@@ -190,12 +265,26 @@ export class NetFloEngine extends EventEmitter {
     try {
       // Refresh adapters and update pool
       this.refreshAdapters();
+      this.state.lanGateway.localIp = getPrimaryLocalIp(this.state.adapters);
       this.pool.updateAdapters(this.state.adapters);
       this.socksServer.updateAdapters(this.state.adapters, this.state.mode);
+      this.httpProxyServer.updateAdapters(this.state.adapters, this.state.mode);
 
       // Start SOCKS5 proxy
-      await this.socksServer.start();
-      this.log(`[Engine] SOCKS5 proxy started on 127.0.0.1:${SOCKS5_PORT}`);
+      await this.socksServer.start(this.state.socksPort, this.state.lanGateway.bindHost);
+      this.log(`[Engine] SOCKS5 proxy started on ${this.state.lanGateway.bindHost}:${this.state.socksPort}`);
+
+      // Start HTTP CONNECT proxy for LAN & browser support
+      await this.httpProxyServer.start(this.state.lanGateway.httpPort, this.state.lanGateway.bindHost);
+      this.log(`[Engine] HTTP proxy started on ${this.state.lanGateway.bindHost}:${this.state.lanGateway.httpPort}`);
+
+      // Start local IPC Bridge API for Download Manager integration
+      await this.bridgeServer.start();
+      this.log(`[Engine] Local Bridge API started on 127.0.0.1:${BRIDGE_PORT}`);
+
+      // Evaluate tether assistant
+      tetherAssistant.evaluateAdapters(this.state.adapters);
+      this.state.tetherAssistant = tetherAssistant.getState();
 
       // Start stats collection
       this.pool.startStatsCollection();
@@ -214,7 +303,7 @@ export class NetFloEngine extends EventEmitter {
 
       // Automatically enable system proxy if user had it active or requested
       if (this.state.systemProxyActive) {
-        enableSystemProxy(SOCKS5_PORT);
+        enableSystemProxy(this.state.socksPort);
       }
 
       this.pushState();
@@ -253,6 +342,8 @@ export class NetFloEngine extends EventEmitter {
     if (this.pingTimer)        { clearInterval(this.pingTimer);         this.pingTimer = null; }
 
     await this.socksServer.stop();
+    await this.httpProxyServer.stop();
+    await this.bridgeServer.stop();
     this.pool.stopStatsCollection();
 
     this.state.status = 'stopped';
@@ -266,6 +357,7 @@ export class NetFloEngine extends EventEmitter {
     this.state.mode = mode;
     resetRoundRobin();
     this.socksServer.updateAdapters(this.state.adapters, mode);
+    this.httpProxyServer.updateAdapters(this.state.adapters, mode);
     this.pushState();
     this.log(`[Engine] Mode set to ${mode}`);
   }
@@ -276,6 +368,7 @@ export class NetFloEngine extends EventEmitter {
     adapter.includedInBonding = included;
     this.pool.updateAdapters(this.state.adapters);
     this.socksServer.updateAdapters(this.state.adapters, this.state.mode);
+    this.httpProxyServer.updateAdapters(this.state.adapters, this.state.mode);
     this.pushState();
     this.log(`[Engine] Adapter ${adapter.name} ${included ? 'included in' : 'excluded from'} bonding`);
   }
@@ -323,6 +416,7 @@ export class NetFloEngine extends EventEmitter {
   setMeetingShield(active: boolean): void {
     this.state.meetingShieldActive = active;
     this.socksServer.setMeetingShield(active);
+    this.httpProxyServer.setMeetingShield(active);
     this.pushState();
     this.log(`[Meeting Shield] ${active ? '🟢 Enabled — VoIP and conference calls prioritized' : '⚪ Disabled'}`);
   }
@@ -407,6 +501,7 @@ export class NetFloEngine extends EventEmitter {
   setAppRules(rules: AppRule[]): void {
     this.state.appRules = rules;
     this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
+    this.httpProxyServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
     this.pushState();
     this.log(`[Engine] Configured ${rules.length} per-application split-tunneling rules`);
   }
@@ -414,6 +509,7 @@ export class NetFloEngine extends EventEmitter {
   setPortRules(rules: PortRule[]): void {
     this.state.portRules = rules;
     this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
+    this.httpProxyServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
     this.pushState();
     this.log(`[Engine] Configured ${rules.length} port routing rules`);
   }
@@ -421,6 +517,7 @@ export class NetFloEngine extends EventEmitter {
   setAutoTurbo(config: Partial<AutoTurboConfig>): void {
     this.state.autoTurbo = { ...this.state.autoTurbo, ...config };
     this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
+    this.httpProxyServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
     this.pushState();
     this.log(
       `[Engine] Dynamic Congestion Assist (Auto-Turbo) ${this.state.autoTurbo.enabled ? 'enabled' : 'disabled'}`
@@ -429,6 +526,42 @@ export class NetFloEngine extends EventEmitter {
 
   async getRunningApplications(): Promise<string[]> {
     return appDetector.getRunningApplications();
+  }
+
+  // ─── Phase 3: LAN Gateway & Tether Assistant ──────────────
+
+  async setLanGateway(config: Partial<LanGatewayConfig>): Promise<void> {
+    this.state.lanGateway = { ...this.state.lanGateway, ...config };
+
+    if (config.enabled !== undefined) {
+      this.state.lanGateway.bindHost = config.enabled ? '0.0.0.0' : '127.0.0.1';
+    }
+
+    if (this.state.status === 'running') {
+      try {
+        await this.socksServer.start(this.state.socksPort, this.state.lanGateway.bindHost);
+        await this.httpProxyServer.start(this.state.lanGateway.httpPort, this.state.lanGateway.bindHost);
+        this.log(
+          `[LAN Gateway] ${this.state.lanGateway.enabled ? '🟢 Activated on 0.0.0.0' : '⚪ Restricted to loopback (127.0.0.1)'} (SOCKS: ${this.state.socksPort}, HTTP: ${this.state.lanGateway.httpPort})`
+        );
+      } catch (e) {
+        this.log(`[LAN Gateway] Failed to restart proxies: ${e}`);
+      }
+    }
+
+    this.pushState();
+  }
+
+  optimizeTether(): TetherAssistantState {
+    const tether = this.state.adapters.find(a => tetherAssistant.isTetherAdapter(a));
+    if (tether) {
+      tetherAssistant.optimize(tether);
+    } else {
+      applyWcmFix();
+    }
+    this.state.tetherAssistant = tetherAssistant.getState();
+    this.pushState();
+    return this.state.tetherAssistant;
   }
 
   // ─── Polling ──────────────────────────────────────────────
@@ -448,11 +581,17 @@ export class NetFloEngine extends EventEmitter {
     this.refreshAdapters();
     const curr = this.state.adapters.map(a => `${a.ifIndex}:${a.status}`).join(',');
 
+    // Tether assistant inspection
+    tetherAssistant.evaluateAdapters(this.state.adapters);
+    this.state.tetherAssistant = tetherAssistant.getState();
+    this.state.lanGateway.localIp = getPrimaryLocalIp(this.state.adapters);
+
     if (prev !== curr) {
       // Adapter list changed — reapply fixes and update pool
       fixUsbTetherMetrics(this.state.adapters);
       this.pool.updateAdapters(this.state.adapters);
       this.socksServer.updateAdapters(this.state.adapters, this.state.mode);
+      this.httpProxyServer.updateAdapters(this.state.adapters, this.state.mode);
       resetRoundRobin();
       this.pushState();
       this.log('[Engine] Adapter change detected — pool updated');
@@ -467,6 +606,7 @@ export class NetFloEngine extends EventEmitter {
       pingMap.set(ifIndex, ms);
     }
     this.socksServer.updatePings(pingMap);
+    this.httpProxyServer.updatePings(pingMap);
   }
 
   // ─── IPC Push Helpers ─────────────────────────────────────
@@ -479,6 +619,9 @@ export class NetFloEngine extends EventEmitter {
   private pushStats(): void {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.state.stats = this.pool.getStats();
+    this.state.bridge.connectedClients = this.bridgeServer.getClientCount();
+    this.state.lanGateway.activeClients =
+      this.socksServer.getActiveClientCount() + this.httpProxyServer.getActiveClientCount();
 
     // Evaluate Auto-Turbo Congestion Assist
     if (this.state.autoTurbo.enabled && this.state.autoTurbo.secondaryAdapterIndex !== null) {
@@ -498,6 +641,7 @@ export class NetFloEngine extends EventEmitter {
       if (shouldTurbo && !this.state.autoTurbo.active) {
         this.state.autoTurbo.active = true;
         this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
+        this.httpProxyServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
         this.log(
           `[Auto-Turbo] 🚀 High demand detected (${(totalBps / (1024 * 1024)).toFixed(1)} MB/s, Ping: ${primaryPing}ms) — Engaging secondary link!`
         );
@@ -509,6 +653,7 @@ export class NetFloEngine extends EventEmitter {
         ) {
           this.state.autoTurbo.active = false;
           this.socksServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
+          this.httpProxyServer.updateRules(this.state.appRules, this.state.portRules, this.state.autoTurbo);
           this.log('[Auto-Turbo] Traffic normalized — Secondary link returned to standby.');
           this.pushState();
         }

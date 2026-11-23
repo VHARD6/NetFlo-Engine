@@ -38,6 +38,8 @@ declare global {
       setPortRules: (rules: any[]) => Promise<NetFloState>;
       getRunningApps: () => Promise<string[]>;
       setAutoTurbo: (config: any) => Promise<NetFloState>;
+      setLanGateway: (config: any) => Promise<NetFloState>;
+      optimizeTether: () => Promise<NetFloState>;
       onStateUpdate: (cb: (state: NetFloState) => void) => () => void;
       onStatsUpdate: (cb: (stats: AdapterStats[]) => void) => () => void;
       onLog: (cb: (msg: string) => void) => () => void;
@@ -160,6 +162,14 @@ export function useNetFlo() {
     setState(await window.netflo.setAutoTurbo(config));
   }, []);
 
+  const setLanGateway = useCallback(async (config: any) => {
+    setState(await window.netflo.setLanGateway(config));
+  }, []);
+
+  const optimizeTether = useCallback(async () => {
+    setState(await window.netflo.optimizeTether());
+  }, []);
+
   return {
     state,
     stats,
@@ -181,6 +191,8 @@ export function useNetFlo() {
     setPortRules,
     getRunningApps,
     setAutoTurbo,
+    setLanGateway,
+    optimizeTether,
     isRunning: state?.status === 'running',
     isStopped: state?.status === 'stopped',
   };

@@ -27,6 +27,8 @@ const IPC = {
   SET_PORT_RULES: 'netflo:set-port-rules',
   GET_RUNNING_APPS: 'netflo:get-running-apps',
   SET_AUTO_TURBO: 'netflo:set-auto-turbo',
+  SET_LAN_GATEWAY: 'netflo:set-lan-gateway',
+  OPTIMIZE_TETHER: 'netflo:optimize-tether',
 } as const;
 
 // ─── Expose safe IPC API to renderer ─────────────────────────
@@ -68,6 +70,8 @@ contextBridge.exposeInMainWorld('netflo', {
   setPortRules: (rules: unknown[]) => ipcRenderer.invoke(IPC.SET_PORT_RULES, rules),
   getRunningApps: () => ipcRenderer.invoke(IPC.GET_RUNNING_APPS),
   setAutoTurbo: (config: unknown) => ipcRenderer.invoke(IPC.SET_AUTO_TURBO, config),
+  setLanGateway: (config: unknown) => ipcRenderer.invoke(IPC.SET_LAN_GATEWAY, config),
+  optimizeTether: () => ipcRenderer.invoke(IPC.OPTIMIZE_TETHER),
 
 
   // ── Event listeners ───────────────────────────────────────
