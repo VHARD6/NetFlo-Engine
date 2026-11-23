@@ -7,8 +7,8 @@
     border-color: rgba(255, 255, 255, 0.07);
   }
   body {
-    background-color: #090a0f;
-    color: #f1f2f6;
+    background-color: #08090d;
+    color: #f3f4f6;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
     user-select: none;
     -webkit-app-region: no-drag;
@@ -34,23 +34,31 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.12);
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.22);
   }
 }
 
 @layer components {
   /* Editorial section heading */
   .section-label {
-    @apply text-[10px] font-semibold text-zinc-400 uppercase tracking-wider select-none;
+    @apply text-[10px] font-semibold text-zinc-400 uppercase tracking-wider select-none flex items-center gap-1.5;
+  }
+
+  /* Glass panel container with subtle lighting depth */
+  .glass-panel {
+    @apply bg-gradient-to-b from-[#11131a] to-[#0c0d12] border border-white/[0.08] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] relative overflow-hidden;
+  }
+  .glass-panel-subtle {
+    @apply bg-white/[0.02] border border-white/[0.06] rounded-xl;
   }
 
   /* Clean interactive row */
   .interactive-row {
-    @apply transition-colors duration-150 hover:bg-white/[0.025];
+    @apply transition-colors duration-150 hover:bg-white/[0.035];
   }
 
   /* Premium Buttons */
@@ -60,33 +68,35 @@
            disabled:opacity-40 disabled:cursor-not-allowed select-none;
   }
   .btn-primary {
-    @apply btn bg-brand-500 hover:bg-brand-600 text-white shadow-sm active:scale-[0.98];
+    @apply btn bg-gradient-to-b from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 text-white
+           shadow-[0_1px_2px_rgba(0,0,0,0.5),0_0_16px_rgba(99,102,241,0.35)] border-t border-white/25 active:scale-[0.98];
   }
   .btn-ghost {
-    @apply btn bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] active:scale-[0.98];
+    @apply btn bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] hover:border-white/[0.14] active:scale-[0.98];
   }
   .btn-danger {
-    @apply btn bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/25 active:scale-[0.98];
+    @apply btn bg-gradient-to-b from-rose-500/20 to-rose-600/20 hover:from-rose-500/30 hover:to-rose-600/30 text-rose-300
+           border border-rose-500/30 shadow-[0_0_14px_rgba(244,63,94,0.18)] active:scale-[0.98];
   }
 
   /* Micro status badges */
   .badge {
-    @apply inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border leading-none tracking-normal;
+    @apply inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border leading-none tracking-normal font-mono;
   }
   .badge-green {
-    @apply badge bg-emerald-500/10 text-emerald-400 border-emerald-500/20;
+    @apply badge bg-emerald-500/10 text-emerald-400 border-emerald-500/25 shadow-[0_0_8px_rgba(16,185,129,0.12)];
   }
   .badge-yellow {
-    @apply badge bg-amber-500/10 text-amber-400 border-amber-500/20;
+    @apply badge bg-amber-500/10 text-amber-400 border-amber-500/25 shadow-[0_0_8px_rgba(245,158,11,0.12)];
   }
   .badge-red {
-    @apply badge bg-rose-500/10 text-rose-400 border-rose-500/20;
+    @apply badge bg-rose-500/10 text-rose-400 border-rose-500/25 shadow-[0_0_8px_rgba(244,63,94,0.12)];
   }
   .badge-blue {
-    @apply badge bg-sky-500/10 text-sky-400 border-sky-500/20;
+    @apply badge bg-sky-500/10 text-sky-400 border-sky-500/25 shadow-[0_0_8px_rgba(56,189,248,0.12)];
   }
   .badge-purple {
-    @apply badge bg-brand-500/15 text-brand-300 border-brand-500/25;
+    @apply badge bg-indigo-500/15 text-indigo-300 border-indigo-500/30 shadow-[0_0_8px_rgba(99,102,241,0.15)];
   }
   .badge-gray {
     @apply badge bg-white/[0.04] text-zinc-400 border-white/[0.08];

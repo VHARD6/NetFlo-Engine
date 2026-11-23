@@ -16,9 +16,15 @@ export const TetherAssistantCard: React.FC<TetherAssistantCardProps> = ({ state,
   const isOptimized = state.status === 'optimized';
 
   return (
-    <div className="space-y-2">
+    <div className="glass-panel p-4 space-y-3">
       <div className="flex items-center justify-between pb-1">
-        <span className="section-label">Phone Tether Assistant</span>
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded-md bg-sky-500/10 border border-sky-500/25 flex items-center justify-center text-sky-400">
+            <IconPhone size={11} />
+          </div>
+          <span className="section-label">Phone Tether Assistant</span>
+        </div>
+
         <span
           className={
             isOptimized
@@ -37,9 +43,9 @@ export const TetherAssistantCard: React.FC<TetherAssistantCardProps> = ({ state,
         </span>
       </div>
 
-      <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+      <div className="divide-y divide-white/[0.06] border-y border-white/[0.06] rounded-lg overflow-hidden">
         {/* Main status row */}
-        <div className="py-3 px-3 flex items-center justify-between gap-4 interactive-row">
+        <div className="py-3 px-3.5 flex items-center justify-between gap-4 interactive-row">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold text-zinc-100">
               Windows WCM Multi-Homing & USB Priority Fix
@@ -56,13 +62,13 @@ export const TetherAssistantCard: React.FC<TetherAssistantCardProps> = ({ state,
             disabled={!isRunning}
             className="btn-ghost text-xs py-1 px-2.5 shrink-0"
           >
-            <IconZap size={11} className="text-brand-400" />
+            <IconZap size={11} className="text-amber-400" />
             <span>Optimize Now</span>
           </button>
         </div>
 
         {/* Instructions toggle row */}
-        <div className="py-2 px-3 flex items-center justify-between text-xs">
+        <div className="py-2.5 px-3.5 flex items-center justify-between text-xs bg-white/[0.01]">
           <button
             type="button"
             onClick={() => setShowInstructions(!showInstructions)}
@@ -74,13 +80,13 @@ export const TetherAssistantCard: React.FC<TetherAssistantCardProps> = ({ state,
 
         {/* Expandable guide */}
         {showInstructions && (
-          <div className="py-3 px-3 bg-white/[0.015] space-y-2.5 text-xs text-zinc-300">
+          <div className="py-3 px-3.5 bg-white/[0.015] space-y-2.5 text-xs text-zinc-300">
             <div className="flex gap-2 border-b border-white/[0.05] pb-2">
               <button
                 type="button"
                 onClick={() => setActiveTab('android')}
                 className={`text-[11px] font-medium transition-colors ${
-                  activeTab === 'android' ? 'text-white border-b border-brand-400 pb-0.5' : 'text-zinc-500 hover:text-zinc-300'
+                  activeTab === 'android' ? 'text-white border-b border-indigo-400 pb-0.5' : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
                 Android Setup
@@ -89,7 +95,7 @@ export const TetherAssistantCard: React.FC<TetherAssistantCardProps> = ({ state,
                 type="button"
                 onClick={() => setActiveTab('ios')}
                 className={`text-[11px] font-medium transition-colors ${
-                  activeTab === 'ios' ? 'text-white border-b border-brand-400 pb-0.5' : 'text-zinc-500 hover:text-zinc-300'
+                  activeTab === 'ios' ? 'text-white border-b border-indigo-400 pb-0.5' : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
                 iOS / iPhone Setup

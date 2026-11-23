@@ -8,8 +8,6 @@ import {
   IconGlobe,
   IconArrowUp,
   IconArrowDown,
-  IconAlert,
-  IconCheck,
 } from './Icons';
 
 interface AdapterListProps {
@@ -19,18 +17,33 @@ interface AdapterListProps {
   disabled: boolean;
 }
 
-function getAdapterIcon(type: AdapterType, className = 'w-4 h-4') {
+function getAdapterIconMeta(type: AdapterType) {
   switch (type) {
     case 'wifi':
-      return <IconWifi className={className} />;
+      return {
+        icon: <IconWifi className="w-3.5 h-3.5" />,
+        color: 'text-sky-400 bg-sky-500/10 border-sky-500/25',
+      };
     case 'ethernet':
-      return <IconEthernet className={className} />;
+      return {
+        icon: <IconEthernet className="w-3.5 h-3.5" />,
+        color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25',
+      };
     case 'usb-tether':
-      return <IconPhone className={className} />;
+      return {
+        icon: <IconPhone className="w-3.5 h-3.5" />,
+        color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/25',
+      };
     case 'virtual':
-      return <IconVirtual className={className} />;
+      return {
+        icon: <IconVirtual className="w-3.5 h-3.5" />,
+        color: 'text-purple-400 bg-purple-500/10 border-purple-500/25',
+      };
     default:
-      return <IconGlobe className={className} />;
+      return {
+        icon: <IconGlobe className="w-3.5 h-3.5" />,
+        color: 'text-zinc-400 bg-white/[0.05] border-white/[0.1]',
+      };
   }
 }
 
@@ -44,16 +57,24 @@ function formatBytes(bps: number): string {
 export function AdapterList({ adapters, stats, onToggle, disabled }: AdapterListProps) {
   if (adapters.length === 0) {
     return (
-      <div className="py-8 text-center text-xs text-zinc-500 font-mono">
-        No network adapters detected
+      <div className="glass-panel py-10 text-center text-xs text-zinc-500 font-mono">
+        No network interfaces detected
       </div>
     );
   }
 
+  // Calculate highest link throughput for proportional micro-meter scaling
+  let maxRx = 1024 * 1024;
+  let maxTx = 1024 * 1024;
+  for (const s of stats) {
+    if (s.rxBps > maxRx) maxRx = s.rxBps;
+    if (s.txBps > maxTx) maxTx = s.txBps;
+  }
+
   return (
-    <div className="w-full">
+    <div className="glass-panel overflow-hidden">
       {/* Table Column Guide Header */}
-      <div className="grid grid-cols-12 px-3 py-2 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider border-b border-white/[0.06]">
+      <div className="grid grid-cols-12 px-4 py-2.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider border-b border-white/[0.06] bg-white/[0.015]">
         <div className="col-span-5">Interface & Address</div>
         <div className="col-span-2 text-center">Status</div>
         <div className="col-span-3 text-right">Throughput (Down / Up)</div>
@@ -70,27 +91,29 @@ export function AdapterList({ adapters, stats, onToggle, disabled }: AdapterList
           const rxBps = adapterStats?.rxBps ?? 0;
           const txBps = adapterStats?.txBps ?? 0;
           const pingMs = adapterStats?.pingMs ?? 0;
+          const iconMeta = getAdapterIconMeta(adapter.type);
+
+          const rxPercent = Math.min(100, Math.round((rxBps / maxRx) * 100));
+          const txPercent = Math.min(100, Math.round((txBps / maxTx) * 100));
 
           return (
             <div
               key={adapter.ifIndex}
-              className={`grid grid-cols-12 items-center px-3 py-3 transition-colors duration-150 interactive-row ${
-                !isConnected ? 'opacity-50' : ''
-              }`}
+              className={`grid grid-cols-12 items-center px-4 py-3.5 transition-colors duration-150 interactive-row ${
+                !isConnected ? 'opacity-40' : ''
+              } ${isIncluded && isConnected ? 'bg-white/[0.01]' : ''}`}
             >
               {/* Col 1: Interface & Name */}
               <div className="col-span-5 flex items-center gap-3 min-w-0">
-                <span
-                  className={`shrink-0 ${
-                    isConnected && isIncluded ? 'text-zinc-200' : 'text-zinc-500'
-                  }`}
+                <div
+                  className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 ${iconMeta.color}`}
                 >
-                  {getAdapterIcon(adapter.type, 'w-4 h-4')}
-                </span>
+                  {iconMeta.icon}
+                </div>
 
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-zinc-100 truncate">
+                    <span className="text-xs font-semibold text-zinc-100 truncate">
                       {adapter.name}
                     </span>
                     {adapter.killerDetected && (
@@ -104,41 +127,62 @@ export function AdapterList({ adapters, stats, onToggle, disabled }: AdapterList
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] font-mono text-zinc-500 flex items-center gap-2">
-                    <span>{adapter.ipv4 ?? 'No IPv4'}</span>
-                    <span className="text-zinc-700">/</span>
-                    <span className="capitalize">{adapter.type.replace('-', ' ')}</span>
+                  <div className="text-[11px] font-mono text-zinc-400 flex items-center gap-2 mt-0.5">
+                    <span className="text-zinc-300">{adapter.ipv4 ?? 'No IPv4'}</span>
+                    <span className="text-zinc-600">·</span>
+                    <span className="capitalize text-zinc-500">{adapter.type.replace('-', ' ')}</span>
                   </div>
                 </div>
               </div>
 
               {/* Col 2: Status */}
               <div className="col-span-2 flex items-center justify-center">
-                <span className={isConnected ? 'badge-green' : 'badge-gray'}>
+                <span className={isConnected ? (isIncluded ? 'badge-green' : 'badge-yellow') : 'badge-gray'}>
                   <span
                     className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-                      isConnected ? 'bg-emerald-400' : 'bg-zinc-500'
+                      isConnected
+                        ? isIncluded
+                          ? 'bg-emerald-400 animate-pulse'
+                          : 'bg-amber-400'
+                        : 'bg-zinc-600'
                     }`}
                   />
                   {isConnected ? (isIncluded ? 'Bonded' : 'Standby') : 'Offline'}
                 </span>
               </div>
 
-              {/* Col 3: Throughput */}
-              <div className="col-span-3 text-right font-mono text-xs">
+              {/* Col 3: Throughput with proportional visual meters */}
+              <div className="col-span-3 text-right font-mono text-xs pr-1">
                 {isConnected && adapterStats ? (
-                  <div className="flex flex-col items-end">
-                    <div className="flex items-center gap-1 text-emerald-400 font-medium">
-                      <IconArrowDown size={10} />
-                      <span>{formatBytes(rxBps)}</span>
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-2">
+                      <div className="w-16 h-1 bg-zinc-800 rounded-full overflow-hidden flex justify-end">
+                        <div
+                          className="h-full bg-emerald-400 rounded-full transition-all duration-300"
+                          style={{ width: `${rxPercent}%` }}
+                        />
+                      </div>
+                      <span className="text-emerald-400 font-medium flex items-center gap-0.5">
+                        <IconArrowDown size={10} />
+                        {formatBytes(rxBps)}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-1 text-sky-400 text-[10px]">
-                      <IconArrowUp size={9} />
-                      <span>{formatBytes(txBps)}</span>
+
+                    <div className="flex items-center gap-2 text-[10px]">
+                      <div className="w-12 h-1 bg-zinc-800 rounded-full overflow-hidden flex justify-end">
+                        <div
+                          className="h-full bg-sky-400 rounded-full transition-all duration-300"
+                          style={{ width: `${txPercent}%` }}
+                        />
+                      </div>
+                      <span className="text-sky-400 flex items-center gap-0.5">
+                        <IconArrowUp size={9} />
+                        {formatBytes(txBps)}
+                      </span>
                     </div>
                   </div>
                 ) : (
-                  <span className="text-zinc-600">—</span>
+                  <span className="text-zinc-600 font-mono">—</span>
                 )}
               </div>
 
@@ -146,18 +190,23 @@ export function AdapterList({ adapters, stats, onToggle, disabled }: AdapterList
               <div className="col-span-1 text-right font-mono text-xs">
                 {isConnected && adapterStats && pingMs > 0 && pingMs < 999 ? (
                   <span
-                    className={
-                      pingMs > 120
+                    className={`inline-flex items-center gap-1 ${
+                      pingMs > 150
                         ? 'text-amber-400'
                         : pingMs > 250
                         ? 'text-rose-400'
                         : 'text-zinc-300'
-                    }
+                    }`}
                   >
+                    <span
+                      className={`w-1 h-1 rounded-full ${
+                        pingMs > 150 ? 'bg-amber-400' : 'bg-emerald-400'
+                      }`}
+                    />
                     {pingMs}ms
                   </span>
                 ) : (
-                  <span className="text-zinc-600">—</span>
+                  <span className="text-zinc-600 font-mono">—</span>
                 )}
               </div>
 
@@ -170,14 +219,14 @@ export function AdapterList({ adapters, stats, onToggle, disabled }: AdapterList
                   onClick={() => onToggle(adapter.ifIndex, !isIncluded)}
                   disabled={disabled || !isConnected}
                   className={`
-                    relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-150
+                    relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-200
                     focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed
-                    ${isIncluded && isConnected ? 'bg-brand-500' : 'bg-zinc-800'}
+                    ${isIncluded && isConnected ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]' : 'bg-zinc-800'}
                   `}
                 >
                   <span
                     className={`
-                      inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow-sm transition-transform duration-150
+                      inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow-sm transition-transform duration-200
                       ${isIncluded && isConnected ? 'translate-x-3.5' : 'translate-x-0.5'}
                     `}
                   />

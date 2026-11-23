@@ -18,15 +18,21 @@ export const BridgeCard: React.FC<BridgeCardProps> = ({ bridge, isRunning }) => 
   };
 
   return (
-    <div className="space-y-2">
+    <div className="glass-panel p-4 space-y-3">
       <div className="flex items-center justify-between pb-1">
-        <span className="section-label">Download Manager Bridge API</span>
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded-md bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-center text-indigo-400">
+            <IconBridge size={11} />
+          </div>
+          <span className="section-label">Download Manager Bridge API</span>
+        </div>
+
         <span className={isRunning ? 'badge-green text-[10px]' : 'badge-gray text-[10px]'}>
           {isRunning ? `127.0.0.1:${bridge.port}` : 'Bridge Idle'}
         </span>
       </div>
 
-      <div className="py-3 px-3 border-y border-white/[0.06] flex items-center justify-between gap-4 interactive-row text-xs">
+      <div className="py-3 px-3.5 border-y border-white/[0.06] rounded-lg flex items-center justify-between gap-4 interactive-row text-xs bg-white/[0.01]">
         <div className="min-w-0 flex-1">
           <div className="text-xs font-semibold text-zinc-100">
             Local Multi-Stream Aggregation IPC
@@ -38,13 +44,13 @@ export const BridgeCard: React.FC<BridgeCardProps> = ({ bridge, isRunning }) => 
         </div>
 
         <div className="flex items-center gap-2 font-mono text-xs shrink-0">
-          <span className="text-zinc-400 bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06]">
+          <span className="text-indigo-300 bg-white/[0.03] px-2.5 py-1 rounded border border-white/[0.08] shadow-sm">
             {endpoint}
           </span>
           <button
             type="button"
             onClick={copyEndpoint}
-            className="text-zinc-500 hover:text-zinc-300 p-1"
+            className="text-zinc-400 hover:text-white p-1 transition-colors"
             title="Copy API endpoint"
           >
             {copied ? <IconCheck size={12} className="text-emerald-400" /> : <IconCopy size={12} />}

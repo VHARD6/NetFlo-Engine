@@ -19,15 +19,20 @@ export function SafeguardsCard({
   disabled,
 }: SafeguardsCardProps) {
   return (
-    <div className="space-y-2">
+    <div className="glass-panel p-4 space-y-3">
       <div className="flex items-center justify-between pb-1">
-        <span className="section-label">Active Safeguards & QoS</span>
-        <span className="text-[11px] font-mono text-zinc-500">Automated Protection</span>
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded-md bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
+            <IconShield size={11} />
+          </div>
+          <span className="section-label">Active Safeguards & QoS</span>
+        </div>
+        <span className="text-[11px] font-mono text-zinc-400">Continuous Protection</span>
       </div>
 
-      <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+      <div className="divide-y divide-white/[0.06] border-y border-white/[0.06] rounded-lg overflow-hidden">
         {/* Meeting Shield Row */}
-        <div className="py-3 px-3 flex items-center justify-between gap-4 interactive-row">
+        <div className="py-3 px-3.5 flex items-center justify-between gap-4 interactive-row">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-zinc-100">
@@ -54,14 +59,14 @@ export function SafeguardsCard({
             onClick={() => onToggleMeetingShield(!meetingShieldActive)}
             disabled={disabled}
             className={`
-              relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-150
+              relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-200
               focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed
-              ${meetingShieldActive ? 'bg-emerald-500' : 'bg-zinc-800'}
+              ${meetingShieldActive ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-zinc-800'}
             `}
           >
             <span
               className={`
-                inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow-sm transition-transform duration-150
+                inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow-sm transition-transform duration-200
                 ${meetingShieldActive ? 'translate-x-3.5' : 'translate-x-0.5'}
               `}
             />
@@ -69,7 +74,7 @@ export function SafeguardsCard({
         </div>
 
         {/* Battery & Power Saver Row */}
-        <div className="py-3 px-3 flex items-center justify-between gap-4 interactive-row">
+        <div className="py-3 px-3.5 flex items-center justify-between gap-4 interactive-row">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-zinc-100">
@@ -92,14 +97,14 @@ export function SafeguardsCard({
             onClick={() => onTogglePowerSave(!powerSaveMode)}
             disabled={disabled}
             className={`
-              relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-150
+              relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-200
               focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed
-              ${powerSaveMode ? 'bg-amber-500' : 'bg-zinc-800'}
+              ${powerSaveMode ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]' : 'bg-zinc-800'}
             `}
           >
             <span
               className={`
-                inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow-sm transition-transform duration-150
+                inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow-sm transition-transform duration-200
                 ${powerSaveMode ? 'translate-x-3.5' : 'translate-x-0.5'}
               `}
             />

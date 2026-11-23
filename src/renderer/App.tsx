@@ -25,6 +25,7 @@ import {
   IconWifi,
   IconArrowUp,
   IconArrowDown,
+  IconActivity,
 } from './components/Icons';
 
 type TabId = 'overview' | 'routing' | 'safeguards' | 'ecosystem' | 'logs';
@@ -69,8 +70,8 @@ export default function App() {
     return (
       <div className="flex h-screen items-center justify-center bg-canvas">
         <div className="text-zinc-500 font-mono text-xs flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-brand-400 animate-pulse" />
-          <span>Connecting to NetFlo Engine...</span>
+          <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+          <span>Initializing NetFlo Bonding Core...</span>
         </div>
       </div>
     );
@@ -115,10 +116,10 @@ export default function App() {
       {/* ── Frameless Titlebar ───────────────────────────────── */}
       <header className="drag-region flex items-center justify-between px-4 h-9 bg-panel border-b border-white/[0.06] shrink-0">
         <div className="flex items-center gap-2.5 no-drag">
-          <div className="w-4 h-4 rounded bg-brand-500/20 border border-brand-500/30 flex items-center justify-center text-brand-400">
+          <div className="w-4 h-4 rounded bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center text-white shadow-[0_0_10px_rgba(99,102,241,0.5)]">
             <IconWifi size={10} />
           </div>
-          <span className="font-semibold text-xs text-zinc-100 tracking-tight">NetFlo</span>
+          <span className="font-semibold text-xs text-white tracking-tight">NetFlo</span>
           <span className="text-[10px] text-zinc-500 font-mono">v0.1.0</span>
         </div>
 
@@ -143,7 +144,7 @@ export default function App() {
       {/* ── Main App Shell (Sidebar + Viewport) ───────────────── */}
       <div className="flex flex-1 overflow-hidden">
         {/* Modern Sidebar Navigation */}
-        <aside className="w-56 shrink-0 bg-panel border-r border-white/[0.06] flex flex-col justify-between p-3">
+        <aside className="w-56 shrink-0 bg-panel border-r border-white/[0.06] flex flex-col justify-between p-3.5">
           {/* Top Navigation */}
           <div className="space-y-4">
             {/* Master Action Button */}
@@ -153,7 +154,7 @@ export default function App() {
                   type="button"
                   onClick={stop}
                   disabled={loading}
-                  className="w-full btn-danger text-xs py-2 shadow-sm font-medium"
+                  className="w-full btn-danger text-xs py-2 font-medium"
                 >
                   <IconSquare size={11} />
                   <span>Stop Bonding</span>
@@ -163,7 +164,7 @@ export default function App() {
                   type="button"
                   onClick={start}
                   disabled={loading}
-                  className="w-full btn-primary text-xs py-2 shadow-sm font-medium"
+                  className="w-full btn-primary text-xs py-2 font-medium"
                 >
                   <IconPlay size={11} />
                   <span>Start Bonding</span>
@@ -172,7 +173,7 @@ export default function App() {
             </div>
 
             {/* Navigation links */}
-            <nav className="space-y-0.5">
+            <nav className="space-y-1">
               {navItems.map(item => {
                 const isActive = activeTab === item.id;
                 return (
@@ -181,15 +182,15 @@ export default function App() {
                     type="button"
                     onClick={() => setActiveTab(item.id)}
                     className={`
-                      w-full flex items-center justify-between px-2.5 py-2 rounded text-xs font-medium transition-colors cursor-pointer
+                      w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer
                       ${isActive
-                        ? 'bg-white/[0.08] text-white'
+                        ? 'bg-indigo-500/[0.12] text-white border-l-2 border-indigo-400 font-semibold shadow-[inset_0_0_12px_rgba(99,102,241,0.06)]'
                         : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
                       }
                     `}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <span className={isActive ? 'text-brand-400' : 'text-zinc-500'}>
+                      <span className={isActive ? 'text-indigo-400' : 'text-zinc-500'}>
                         {item.icon}
                       </span>
                       <span className="truncate">{item.label}</span>
@@ -200,7 +201,7 @@ export default function App() {
                           item.badge === 'Alert'
                             ? 'bg-amber-500/20 text-amber-300'
                             : isActive
-                            ? 'bg-brand-500/30 text-brand-200'
+                            ? 'bg-indigo-500/30 text-indigo-200'
                             : 'bg-white/[0.04] text-zinc-500'
                         }`}
                       >
@@ -214,12 +215,12 @@ export default function App() {
           </div>
 
           {/* Sidebar Ambient Status & Proxy Switch */}
-          <div className="space-y-3 pt-3 border-t border-white/[0.06]">
+          <div className="space-y-3 pt-3.5 border-t border-white/[0.06]">
             {/* System Proxy Switch */}
             <div className="flex items-center justify-between text-xs">
               <div className="min-w-0">
-                <div className="text-[11px] font-medium text-zinc-300">System Proxy</div>
-                <div className="text-[10px] text-zinc-500">Route HTTP/HTTPS</div>
+                <div className="text-[11px] font-medium text-zinc-200">System Proxy</div>
+                <div className="text-[10px] text-zinc-500">Auto-Route All Apps</div>
               </div>
               <button
                 type="button"
@@ -228,14 +229,14 @@ export default function App() {
                 onClick={() => setSystemProxy(!state.systemProxyActive)}
                 disabled={!isRunning}
                 className={`
-                  relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-150
+                  relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-200
                   focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed
-                  ${state.systemProxyActive ? 'bg-emerald-500' : 'bg-zinc-800'}
+                  ${state.systemProxyActive ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-zinc-800'}
                 `}
               >
                 <span
                   className={`
-                    inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow-sm transition-transform duration-150
+                    inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow-sm transition-transform duration-200
                     ${state.systemProxyActive ? 'translate-x-3.5' : 'translate-x-0.5'}
                   `}
                 />
@@ -244,15 +245,15 @@ export default function App() {
 
             {/* Quick Status Stats */}
             <div className="pt-2 border-t border-white/[0.04] text-[10px] space-y-1 font-mono">
-              <div className="flex items-center justify-between text-zinc-500">
+              <div className="flex items-center justify-between text-zinc-400">
                 <span>Bonded Links</span>
-                <span className="text-zinc-300">
+                <span className="text-zinc-200 font-medium">
                   {connectedAdapters.length} of {state.adapters.length}
                 </span>
               </div>
-              <div className="flex items-center justify-between text-zinc-500">
+              <div className="flex items-center justify-between text-zinc-400">
                 <span>Combined Speed</span>
-                <span className="text-brand-300 font-semibold">
+                <span className="text-indigo-300 font-bold">
                   {formatSpeed(totalThroughput)}
                 </span>
               </div>
@@ -261,25 +262,27 @@ export default function App() {
         </aside>
 
         {/* ── Main Viewport (Card-Free, Continuous Layout) ─────── */}
-        <main className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        <main className="flex-1 overflow-y-auto px-6 py-5 space-y-5 bg-[radial-gradient(ellipse_80%_50%_at_50%_-15%,rgba(99,102,241,0.12),transparent_70%)]">
           {/* ── TAB 1: OVERVIEW ─────────────────────────────────── */}
           {activeTab === 'overview' && (
-            <div className="space-y-6">
-              {/* Integrated Telemetry Hero Banner (No Cards!) */}
-              <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3">
+            <div className="space-y-5">
+              {/* Elevated Telemetry Hero Console with Ambient Lighting */}
+              <div className="glass-panel p-5 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-950/30 via-[#0e1017] to-[#0a0b10] space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-4">
                   <div>
-                    <span className="section-label block mb-1">Combined Live Throughput</span>
-                    <div className="flex items-baseline gap-3">
-                      <span className="text-3xl font-mono font-bold tracking-tight text-white">
+                    <span className="section-label block mb-1.5 text-zinc-400">
+                      Live Aggregated Throughput
+                    </span>
+                    <div className="flex items-baseline gap-3.5 flex-wrap">
+                      <span className="text-4xl font-mono font-bold tracking-tight text-white drop-shadow-[0_2px_16px_rgba(99,102,241,0.35)]">
                         {formatSpeed(totalThroughput)}
                       </span>
-                      <div className="flex items-center gap-3 text-xs font-mono">
-                        <span className="text-emerald-400 flex items-center gap-1">
-                          <IconArrowDown size={11} /> {formatSpeed(totalRxBps)}
+                      <div className="flex items-center gap-2">
+                        <span className="badge-green px-2.5 py-1 text-xs">
+                          <IconArrowDown size={11} className="mr-1 inline" /> {formatSpeed(totalRxBps)}
                         </span>
-                        <span className="text-sky-400 flex items-center gap-1">
-                          <IconArrowUp size={11} /> {formatSpeed(totalTxBps)}
+                        <span className="badge-blue px-2.5 py-1 text-xs">
+                          <IconArrowUp size={11} className="mr-1 inline" /> {formatSpeed(totalTxBps)}
                         </span>
                       </div>
                     </div>
@@ -289,16 +292,20 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setActiveTab('routing')}
-                      className="text-[11px] text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded border border-white/[0.08] hover:border-white/[0.15] transition-colors font-mono"
+                      className="text-[11px] text-zinc-300 hover:text-white px-2.5 py-1 rounded-md border border-white/[0.08] hover:border-white/[0.2] bg-white/[0.02] hover:bg-white/[0.05] transition-all font-mono"
                     >
-                      Mode: <span className="text-zinc-200 capitalize">{state.mode}</span>
+                      Mode: <span className="text-indigo-300 capitalize font-medium">{state.mode}</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('safeguards')}
-                      className="text-[11px] text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded border border-white/[0.08] hover:border-white/[0.15] transition-colors font-mono"
+                      className="text-[11px] text-zinc-300 hover:text-white px-2.5 py-1 rounded-md border border-white/[0.08] hover:border-white/[0.2] bg-white/[0.02] hover:bg-white/[0.05] transition-all font-mono"
                     >
-                      {state.meetingShieldActive ? 'Shield: Active' : 'Shield: Off'}
+                      {state.meetingShieldActive ? (
+                        <span className="text-emerald-400">Shield Active</span>
+                      ) : (
+                        <span className="text-zinc-400">Shield Off</span>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -319,7 +326,7 @@ export default function App() {
                     type="button"
                     onClick={applyFixes}
                     disabled={loading}
-                    className="text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors flex items-center gap-1 cursor-pointer"
+                    className="text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors flex items-center gap-1 cursor-pointer font-mono"
                   >
                     <IconRefresh size={11} />
                     <span>Re-apply System Fixes</span>
@@ -334,15 +341,15 @@ export default function App() {
                 />
               </div>
 
-              {/* System-Wide Routing Preference Strip */}
-              <div className="space-y-2">
+              {/* System-Wide Routing Preference Panel */}
+              <div className="glass-panel p-4 space-y-3">
                 <span className="section-label block pb-1">
                   System-Wide Routing Controls
                 </span>
 
-                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06] rounded-lg overflow-hidden">
                   {/* System Proxy Row */}
-                  <div className="py-3 px-3 flex items-center justify-between gap-4 interactive-row text-xs">
+                  <div className="py-3 px-3.5 flex items-center justify-between gap-4 interactive-row text-xs">
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-zinc-100">Windows System HTTP/HTTPS Proxy</div>
                       <div className="text-[11px] text-zinc-400 mt-0.5">
@@ -356,14 +363,14 @@ export default function App() {
                       onClick={() => setSystemProxy(!state.systemProxyActive)}
                       disabled={!isRunning}
                       className={`
-                        relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-150
+                        relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-200
                         focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed
-                        ${state.systemProxyActive ? 'bg-emerald-500' : 'bg-zinc-800'}
+                        ${state.systemProxyActive ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-zinc-800'}
                       `}
                     >
                       <span
                         className={`
-                          inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow-sm transition-transform duration-150
+                          inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow-sm transition-transform duration-200
                           ${state.systemProxyActive ? 'translate-x-3.5' : 'translate-x-0.5'}
                         `}
                       />
@@ -371,7 +378,7 @@ export default function App() {
                   </div>
 
                   {/* Wintun Virtual Device Row */}
-                  <div className="py-3 px-3 flex items-center justify-between gap-4 interactive-row text-xs">
+                  <div className="py-3 px-3.5 flex items-center justify-between gap-4 interactive-row text-xs">
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-zinc-100">Wintun Layer 3 TUN Device</div>
                       <div className="text-[11px] text-zinc-400 mt-0.5">
@@ -385,14 +392,14 @@ export default function App() {
                       onClick={() => setWintun(!state.wintunActive)}
                       disabled={!isRunning}
                       className={`
-                        relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-150
+                        relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors duration-200
                         focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed
-                        ${state.wintunActive ? 'bg-brand-500' : 'bg-zinc-800'}
+                        ${state.wintunActive ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.4)]' : 'bg-zinc-800'}
                       `}
                     >
                       <span
                         className={`
-                          inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow-sm transition-transform duration-150
+                          inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow-sm transition-transform duration-200
                           ${state.wintunActive ? 'translate-x-3.5' : 'translate-x-0.5'}
                         `}
                       />
@@ -405,7 +412,7 @@ export default function App() {
 
           {/* ── TAB 2: ROUTING & MODES ───────────────────────────── */}
           {activeTab === 'routing' && (
-            <div className="space-y-6">
+            <div className="space-y-5">
               <ModeSelector
                 mode={state.mode}
                 onChange={setMode}
@@ -431,7 +438,7 @@ export default function App() {
 
           {/* ── TAB 3: SAFEGUARDS & QUOTA ───────────────────────── */}
           {activeTab === 'safeguards' && (
-            <div className="space-y-6">
+            <div className="space-y-5">
               <SafeguardsCard
                 meetingShieldActive={state.meetingShieldActive}
                 protectedMeetingCount={state.protectedMeetingCount}
@@ -453,7 +460,7 @@ export default function App() {
 
           {/* ── TAB 4: LAN & ECOSYSTEM ──────────────────────────── */}
           {activeTab === 'ecosystem' && (
-            <div className="space-y-6">
+            <div className="space-y-5">
               <LanGatewayCard
                 config={state.lanGateway}
                 onUpdate={setLanGateway}
@@ -476,12 +483,12 @@ export default function App() {
           {/* ── TAB 5: LOGS & DIAGNOSTICS ────────────────────────── */}
           {activeTab === 'logs' && (
             <div className="space-y-4 h-[calc(100vh-100px)] flex flex-col">
-              <div className="flex-1 min-h-0">
+              <div className="flex-1 min-h-0 glass-panel p-4">
                 <LogPanel logs={logs} />
               </div>
 
-              <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-xs shrink-0">
-                <span className="text-[11px] text-zinc-500">
+              <div className="glass-panel p-3 flex items-center justify-between text-xs shrink-0">
+                <span className="text-[11px] text-zinc-400">
                   Re-enforces Windows WCM Simultaneous Policies and clears interface metrics.
                 </span>
                 <button

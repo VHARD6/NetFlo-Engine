@@ -100,10 +100,16 @@ export function AppRoutingCard({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="glass-panel p-4 space-y-3">
       {/* Header and presets */}
       <div className="flex items-center justify-between pb-1">
-        <span className="section-label">Per-Application Split-Tunneling</span>
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded-md bg-sky-500/10 border border-sky-500/25 flex items-center justify-center text-sky-400">
+            <IconSplit size={11} />
+          </div>
+          <span className="section-label">Per-Application Split-Tunneling</span>
+        </div>
+
         <div className="flex items-center gap-1.5">
           <button
             type="button"
@@ -122,7 +128,7 @@ export function AppRoutingCard({
           <button
             type="button"
             onClick={() => setShowAddForm(!showAddForm)}
-            className="text-[10px] text-brand-300 hover:text-brand-200 px-2 py-0.5 rounded border border-brand-500/30 bg-brand-500/10 transition-colors flex items-center gap-1"
+            className="text-[10px] text-indigo-300 hover:text-indigo-200 px-2 py-0.5 rounded border border-indigo-500/30 bg-indigo-500/10 transition-colors flex items-center gap-1"
           >
             <IconPlus size={10} />
             <span>Add Rule</span>
@@ -130,27 +136,27 @@ export function AppRoutingCard({
         </div>
       </div>
 
-      {/* Inline Add Rule Bar */}
+      {/* Inline Add Rule Form Drawer */}
       {showAddForm && (
-        <div className="p-3 bg-white/[0.02] border border-white/[0.08] rounded space-y-2 mb-2">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div className="p-3 bg-white/[0.025] border border-white/[0.08] rounded-lg space-y-2.5 mb-2 shadow-inner">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
             <div>
-              <label className="text-[10px] font-mono text-zinc-500 block mb-1">Process Name</label>
+              <label className="text-[10px] font-mono text-zinc-400 block mb-1">Process Name</label>
               <input
                 type="text"
                 placeholder="e.g. chrome.exe"
                 value={customProcess}
                 onChange={e => setCustomProcess(e.target.value)}
-                className="w-full bg-zinc-900 border border-white/[0.1] rounded px-2 py-1 text-xs text-zinc-200 font-mono focus:outline-none focus:border-brand-500"
+                className="w-full bg-zinc-900 border border-white/[0.1] rounded px-2.5 py-1 text-xs text-zinc-200 font-mono focus:outline-none focus:border-indigo-400 shadow-sm"
               />
             </div>
 
             <div>
-              <label className="text-[10px] font-mono text-zinc-500 block mb-1">Or Select Running App</label>
+              <label className="text-[10px] font-mono text-zinc-400 block mb-1">Or Select Running App</label>
               <select
                 value={selectedProcess}
                 onChange={e => setSelectedProcess(e.target.value)}
-                className="w-full bg-zinc-900 border border-white/[0.1] rounded px-2 py-1 text-xs text-zinc-200 font-mono focus:outline-none focus:border-brand-500"
+                className="w-full bg-zinc-900 border border-white/[0.1] rounded px-2.5 py-1 text-xs text-zinc-200 font-mono focus:outline-none focus:border-indigo-400 shadow-sm"
               >
                 {runningApps.map(app => (
                   <option key={app} value={app}>
@@ -161,7 +167,7 @@ export function AppRoutingCard({
             </div>
 
             <div>
-              <label className="text-[10px] font-mono text-zinc-500 block mb-1">Target Action</label>
+              <label className="text-[10px] font-mono text-zinc-400 block mb-1">Target Action</label>
               <select
                 value={pinnedAdapter !== null ? `pin_${pinnedAdapter}` : targetMode}
                 onChange={e => {
@@ -172,7 +178,7 @@ export function AppRoutingCard({
                     setTargetMode(e.target.value as DispatchMode);
                   }
                 }}
-                className="w-full bg-zinc-900 border border-white/[0.1] rounded px-2 py-1 text-xs text-zinc-200 font-mono focus:outline-none focus:border-brand-500"
+                className="w-full bg-zinc-900 border border-white/[0.1] rounded px-2.5 py-1 text-xs text-zinc-200 font-mono focus:outline-none focus:border-indigo-400 shadow-sm"
               >
                 <optgroup label="Dispatch Algorithm Override">
                   <option value="round-robin">Force Round-Robin</option>
@@ -190,7 +196,7 @@ export function AppRoutingCard({
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex justify-end gap-2 pt-1 border-t border-white/[0.04]">
             <button
               type="button"
               onClick={() => setShowAddForm(false)}
@@ -210,8 +216,8 @@ export function AppRoutingCard({
       )}
 
       {/* Rules Table */}
-      <div className="w-full">
-        <div className="grid grid-cols-12 px-3 py-2 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider border-b border-white/[0.06]">
+      <div className="w-full rounded-lg overflow-hidden border border-white/[0.06]">
+        <div className="grid grid-cols-12 px-3.5 py-2 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider border-b border-white/[0.06] bg-white/[0.015]">
           <div className="col-span-5">Application Executable</div>
           <div className="col-span-4">Assigned Routing Policy</div>
           <div className="col-span-2 text-center">Status</div>
@@ -219,7 +225,7 @@ export function AppRoutingCard({
         </div>
 
         {rules.length === 0 ? (
-          <div className="py-6 text-center text-xs text-zinc-500 font-mono">
+          <div className="py-8 text-center text-xs text-zinc-500 font-mono">
             No per-application rules configured. Add an app above.
           </div>
         ) : (
@@ -233,12 +239,12 @@ export function AppRoutingCard({
               return (
                 <div
                   key={rule.id}
-                  className={`grid grid-cols-12 items-center px-3 py-2.5 interactive-row text-xs ${
+                  className={`grid grid-cols-12 items-center px-3.5 py-2.5 interactive-row text-xs ${
                     !rule.enabled ? 'opacity-40' : ''
                   }`}
                 >
                   <div className="col-span-5 flex items-center gap-2 font-mono text-zinc-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand-400" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
                     <span>{rule.processName}</span>
                   </div>
 
@@ -264,14 +270,14 @@ export function AppRoutingCard({
                       onClick={() => handleToggleRule(rule.id)}
                       disabled={disabled}
                       className={`
-                        relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition-colors duration-150
+                        relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition-colors duration-200
                         focus:outline-none disabled:opacity-30
-                        ${rule.enabled ? 'bg-brand-500' : 'bg-zinc-800'}
+                        ${rule.enabled ? 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.4)]' : 'bg-zinc-800'}
                       `}
                     >
                       <span
                         className={`
-                          inline-block h-2 w-2 transform rounded-full bg-white shadow-sm transition-transform duration-150
+                          inline-block h-2 w-2 transform rounded-full bg-white shadow-sm transition-transform duration-200
                           ${rule.enabled ? 'translate-x-3' : 'translate-x-0.5'}
                         `}
                       />
