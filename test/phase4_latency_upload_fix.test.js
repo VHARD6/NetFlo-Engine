@@ -102,4 +102,110 @@ describe('Phase 4: HTTP Proxy WebSocket Upgrade (Speedtest Upload Fix)', () => {
     await proxy.stop();
     await new Promise(r => targetServer.close(r));
   });
+
+  it('successfully forwards plain HTTP GET requests (CRL/OCSP revocation checks)', async () => {
+    const targetServer = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/pkix-crl' });
+      res.end('MOCK_CRL_PAYLOAD');
+    });
+    await new Promise(r => targetServer.listen(0, '127.0.0.1', r));
+    const targetPort = targetServer.address().port;
+
+    const mockPool = {
+      createConnection: async (_adapter, host, port) => {
+        return new Promise((resolve, reject) => {
+          const s = net.createConnection(port, host, () => resolve(s));
+          s.once('error', reject);
+        });
+      }
+    };
+
+    const proxy = new HttpProxyServer(mockPool, 0, '127.0.0.1', true);
+    proxy.updateAdapters([
+      { ifIndex: 1, name: 'Adapter1', type: 'wifi', status: 'connected', ipv4: '192.168.1.5', includedInBonding: true, speedMbps: 100, mac: '', alias: '', killerDetected: false }
+    ], 'round-robin');
+
+    await proxy.start(0, '127.0.0.1');
+    const proxyPort = proxy.server.address().port;
+
+    const res = await new Promise((resolve, reject) => {
+      const req = http.request({
+        host: '127.0.0.1',
+        port: proxyPort,
+        path: `http://127.0.0.1:${targetPort}/test.crl`,
+        method: 'GET',
+        headers: { 'Host': `127.0.0.1:${targetPort}` }
+      }, r => {
+        let body = '';
+        r.on('data', chunk => body += chunk);
+        r.on('end', () => resolve({ statusCode: r.statusCode, body }));
+      });
+      req.on('error', reject);
+      req.end();
+    });
+
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(res.body, 'MOCK_CRL_PAYLOAD');
+
+    await proxy.stop();
+    await new Promise(r => targetServer.close(r));
+  });
+
+  it('successfully forwards plain HTTP POST requests (Ookla speedtest upload chunks)', async () => {
+    const targetServer = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        res.writeHead(307, {
+          'Location': 'https://server-ookla.net:8080/upload.php',
+          'Content-Length': '0'
+        });
+        res.end();
+      });
+    });
+    await new Promise(r => targetServer.listen(0, '127.0.0.1', r));
+    const targetPort = targetServer.address().port;
+
+    const mockPool = {
+      createConnection: async (_adapter, host, port) => {
+        return new Promise((resolve, reject) => {
+          const s = net.createConnection(port, host, () => resolve(s));
+          s.once('error', reject);
+        });
+      }
+    };
+
+    const proxy = new HttpProxyServer(mockPool, 0, '127.0.0.1', true);
+    proxy.updateAdapters([
+      { ifIndex: 1, name: 'Adapter1', type: 'wifi', status: 'connected', ipv4: '192.168.1.5', includedInBonding: true, speedMbps: 100, mac: '', alias: '', killerDetected: false }
+    ], 'round-robin');
+
+    await proxy.start(0, '127.0.0.1');
+    const proxyPort = proxy.server.address().port;
+
+    const res = await new Promise((resolve, reject) => {
+      const req = http.request({
+        host: '127.0.0.1',
+        port: proxyPort,
+        path: `http://127.0.0.1:${targetPort}/speedtest/upload.php`,
+        method: 'POST',
+        headers: {
+          'Host': `127.0.0.1:${targetPort}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }, r => {
+        resolve({ statusCode: r.statusCode, location: r.headers.location });
+      });
+      req.on('error', reject);
+      req.write('size=1000000');
+      req.end();
+    });
+
+    assert.strictEqual(res.statusCode, 307);
+    assert.strictEqual(res.location, 'https://server-ookla.net:8080/upload.php');
+
+    await proxy.stop();
+    await new Promise(r => targetServer.close(r));
+  });
 });
+

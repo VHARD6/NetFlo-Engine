@@ -217,13 +217,11 @@ export class HttpProxyServer extends EventEmitter {
       return;
     }
 
-    clientSocket.pause();
     let remoteSocket: net.Socket;
     try {
       remoteSocket = await this.pool.createConnection(adapter, dstHost, dstPort);
     } catch (e) {
       this.emit('log', `[HTTP Proxy] Connection to ${dstHost}:${dstPort} failed: ${e}`);
-      clientSocket.resume();
       clientSocket.write('HTTP/1.1 504 Gateway Timeout\r\n\r\n');
       clientSocket.destroy();
       return;
@@ -249,7 +247,11 @@ export class HttpProxyServer extends EventEmitter {
       this.emit('log', `[HTTP Proxy] CONNECT ${dstHost}:${dstPort} → via ${adapter.name}`);
     }
 
-    clientSocket.resume();
+    clientSocket.setNoDelay(true);
+    clientSocket.setKeepAlive(true, 15000);
+    remoteSocket.setNoDelay(true);
+    remoteSocket.setKeepAlive(true, 15000);
+
     // Bidirectional pipe
     clientSocket.pipe(remoteSocket);
     remoteSocket.pipe(clientSocket);
@@ -335,13 +337,11 @@ export class HttpProxyServer extends EventEmitter {
       return;
     }
 
-    clientSocket.pause();
     let remoteSocket: net.Socket;
     try {
       remoteSocket = await this.pool.createConnection(adapter, dstHost, dstPort);
     } catch (e) {
       this.emit('log', `[HTTP Proxy] Upgrade connection to ${dstHost}:${dstPort} failed: ${e}`);
-      clientSocket.resume();
       clientSocket.write('HTTP/1.1 504 Gateway Timeout\r\n\r\n');
       clientSocket.destroy();
       return;
@@ -381,7 +381,11 @@ export class HttpProxyServer extends EventEmitter {
       this.emit('log', `[HTTP Proxy] Upgrade ${dstHost}:${dstPort} → via ${adapter.name}`);
     }
 
-    clientSocket.resume();
+    clientSocket.setNoDelay(true);
+    clientSocket.setKeepAlive(true, 15000);
+    remoteSocket.setNoDelay(true);
+    remoteSocket.setKeepAlive(true, 15000);
+
     clientSocket.pipe(remoteSocket);
     remoteSocket.pipe(clientSocket);
 
@@ -457,7 +461,11 @@ export class HttpProxyServer extends EventEmitter {
         sanitizedHeaders[key] = value;
       }
     }
-    sanitizedHeaders['host'] = dstHost;
+    if (dstPort !== 80 && dstPort !== 443) {
+      sanitizedHeaders['host'] = `${dstHost}:${dstPort}`;
+    } else {
+      sanitizedHeaders['host'] = dstHost;
+    }
 
     try {
       const forwardReq = http.request({
@@ -469,13 +477,17 @@ export class HttpProxyServer extends EventEmitter {
         createConnection: (_opts, cb) => {
           this.pool
             .createConnection(adapter, dstHost, dstPort)
-            .then(sock => cb(null, sock))
+            .then(sock => {
+              sock.setNoDelay(true);
+              cb(null, sock);
+            })
             .catch(err => cb(err, undefined as any));
           return undefined as any;
         },
       }, remoteRes => {
         res.writeHead(remoteRes.statusCode || 200, remoteRes.headers);
         remoteRes.pipe(res);
+        remoteRes.on('error', () => res.destroy());
       });
 
       forwardReq.on('error', err => {
@@ -485,7 +497,19 @@ export class HttpProxyServer extends EventEmitter {
         }
       });
 
-      req.pipe(forwardReq);
+      req.on('error', () => forwardReq.destroy());
+      res.on('error', () => forwardReq.destroy());
+      res.on('close', () => {
+        if (!res.writableEnded) {
+          forwardReq.destroy();
+        }
+      });
+
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        forwardReq.end();
+      } else {
+        req.pipe(forwardReq);
+      }
     } catch (e) {
       if (!res.headersSent) {
         res.writeHead(500, { 'Content-Type': 'text/plain' });

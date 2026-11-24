@@ -211,6 +211,8 @@ export async function createBoundConnection(
         const handle = new TCP(1); // 1 = TCP socket type in libuv
         handle.open(sock);
         const socket = new (net.Socket as any)({ handle });
+        socket.setNoDelay(true);
+        socket.setKeepAlive(true, 15000);
         resolve(socket);
       } catch (wrapErr) {
         closesocket(sock);

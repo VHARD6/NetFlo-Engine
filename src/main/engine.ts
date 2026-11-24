@@ -119,7 +119,7 @@ export class NetFloEngine extends EventEmitter {
       ],
       portRules: [],
       autoTurbo: {
-        enabled: true,
+        enabled: false,
         active: false,
         highThroughputThresholdBps: 2 * 1024 * 1024,
         highLatencyThresholdMs: 150,

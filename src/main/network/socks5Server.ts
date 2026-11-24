@@ -265,7 +265,6 @@ export class Socks5Server extends EventEmitter {
         return;
       }
 
-      client.pause();
       let remote: net.Socket;
       try {
         remote = await this.pool.createConnection(adapter, dstHost, dstPort);
@@ -273,13 +272,10 @@ export class Socks5Server extends EventEmitter {
         this.emit('log', `[SOCKS5] createConnection failed: ${e}`);
         const msg = String(e);
         const rep = msg.includes('refused') ? REP_CONN_REFUSED : REP_HOST_UNREACH;
-        client.resume();
         sendSocksReply(client, rep);
         client.destroy();
         return;
       }
-
-      client.resume();
 
       // ── Step 5: Send success reply ───────────────────────
       if (client.destroyed || !client.writable) {
@@ -304,6 +300,11 @@ export class Socks5Server extends EventEmitter {
           `[SOCKS5] [${this.connectionCount}] ${tag}${dstHost}:${dstPort} → via ${adapter.name}`
         );
       }
+
+      client.setNoDelay(true);
+      client.setKeepAlive(true, 15000);
+      remote.setNoDelay(true);
+      remote.setKeepAlive(true, 15000);
 
       remote.on('error', () => client.destroy());
       client.on('error', () => remote.destroy());
