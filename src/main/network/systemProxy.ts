@@ -12,7 +12,7 @@
  * requiring a system restart.
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import koffi from 'koffi';
 
 const REG_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
@@ -45,10 +45,20 @@ export function enableSystemProxy(socksPort = 1080, httpPort = 8080): boolean {
   if (process.platform !== 'win32') return false;
   try {
     const proxyServer = `http=127.0.0.1:${httpPort};https=127.0.0.1:${httpPort};socks=127.0.0.1:${socksPort}`;
-    execSync(`reg add "${REG_KEY}" /v ProxyEnable /t REG_DWORD /d 1 /f`, { stdio: 'ignore' });
-    execSync(`reg add "${REG_KEY}" /v ProxyServer /t REG_SZ /d "${proxyServer}" /f`, { stdio: 'ignore' });
+    execFileSync('reg', ['add', REG_KEY, '/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '1', '/f'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    execFileSync('reg', ['add', REG_KEY, '/v', 'ProxyServer', '/t', 'REG_SZ', '/d', proxyServer, '/f'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
     // Bypass all local loopback addresses and IPC services
-    execSync(`reg add "${REG_KEY}" /v ProxyOverride /t REG_SZ /d "<local>;localhost;127.0.0.1;127.*;::1" /f`, { stdio: 'ignore' });
+    execFileSync(
+      'reg',
+      ['add', REG_KEY, '/v', 'ProxyOverride', '/t', 'REG_SZ', '/d', '<local>;localhost;127.0.0.1;127.*;::1', '/f'],
+      { stdio: 'ignore', windowsHide: true }
+    );
     notifySystemSettingsChanged();
     console.log(`[SystemProxy] System proxy enabled on 127.0.0.1 (HTTP: ${httpPort}, SOCKS: ${socksPort})`);
     return true;
@@ -62,8 +72,14 @@ export function enableSystemProxy(socksPort = 1080, httpPort = 8080): boolean {
 export function disableSystemProxy(): boolean {
   if (process.platform !== 'win32') return false;
   try {
-    execSync(`reg add "${REG_KEY}" /v ProxyEnable /t REG_DWORD /d 0 /f`, { stdio: 'ignore' });
-    execSync(`reg add "${REG_KEY}" /v ProxyServer /t REG_SZ /d "" /f`, { stdio: 'ignore' });
+    execFileSync('reg', ['add', REG_KEY, '/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '0', '/f'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    execFileSync('reg', ['add', REG_KEY, '/v', 'ProxyServer', '/t', 'REG_SZ', '/d', '', '/f'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
     notifySystemSettingsChanged();
     console.log('[SystemProxy] System proxy disabled and cleared');
     return true;
@@ -77,9 +93,10 @@ export function disableSystemProxy(): boolean {
 export function isSystemProxyEnabled(): boolean {
   if (process.platform !== 'win32') return false;
   try {
-    const out = execSync(`reg query "${REG_KEY}" /v ProxyEnable`, {
+    const out = execFileSync('reg', ['query', REG_KEY, '/v', 'ProxyEnable'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
     });
     const m = out.match(/REG_DWORD\s+0x(\w+)/i);
     return m ? parseInt(m[1], 16) === 1 : false;

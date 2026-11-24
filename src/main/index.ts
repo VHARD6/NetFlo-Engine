@@ -147,6 +147,22 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const isDevUrl = process.env.VITE_DEV_SERVER_URL && url.startsWith(process.env.VITE_DEV_SERVER_URL);
+    const isLocalhost = isDev && (url.startsWith('http://localhost:5173') || url.startsWith('http://127.0.0.1:5173'));
+    const isLocalFile = url.startsWith('file://');
+    if (!isDevUrl && !isLocalhost && !isLocalFile) {
+      event.preventDefault();
+      if (/^https?:/i.test(url)) {
+        void shell.openExternal(url);
+      }
+    }
+  });
+
+  mainWindow.webContents.on('will-attach-webview', (event) => {
+    event.preventDefault();
+  });
+
   // Stop bonding, revert system proxy, and quit when window is closed
   mainWindow.on('close', (e) => {
     if (!isQuitting) {

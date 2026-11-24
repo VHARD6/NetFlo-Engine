@@ -82,10 +82,40 @@ export class BridgeServer extends EventEmitter {
   }
 
   private handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
-    // Set CORS headers so local web dashboards and electron apps can query seamlessly
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    // 1. DNS Rebinding Protection: strictly validate Host header
+    const hostHeader = (req.headers.host || '').toLowerCase().trim();
+    const isAllowedHost =
+      hostHeader === `127.0.0.1:${this.port}` ||
+      hostHeader === `localhost:${this.port}` ||
+      hostHeader === '127.0.0.1' ||
+      hostHeader === 'localhost';
+
+    if (!isAllowedHost) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Forbidden: Invalid Host header (DNS Rebinding protection)' }));
+      return;
+    }
+
+    // 2. Cross-Origin Protection: reject untrusted external browser origins
+    const origin = req.headers.origin;
+    if (origin) {
+      const isAllowedOrigin =
+        origin === 'null' ||
+        origin === `http://127.0.0.1:${this.port}` ||
+        origin === `http://localhost:${this.port}` ||
+        origin === 'http://localhost:5173';
+
+      if (!isAllowedOrigin) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Forbidden: Untrusted Cross-Origin access rejected' }));
+        return;
+      }
+
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.setHeader('Vary', 'Origin');
+    }
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204);

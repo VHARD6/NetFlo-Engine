@@ -70,22 +70,23 @@ export function detectKillerSuite(): KillerStatus {
   };
 }
 
+import fs from 'fs';
+import { shell } from 'electron';
+
 /** Open Killer Control Center if installed */
 export function openKillerControlCenter(): void {
+  const killerExe = 'C:\\Program Files\\Killer Networking\\Killer Control Center\\KillerControlCenter.exe';
   try {
-    execSync(
-      'start "" "C:\\Program Files\\Killer Networking\\Killer Control Center\\KillerControlCenter.exe"',
-      { shell: 'cmd.exe', stdio: 'ignore' }
-    );
-  } catch {
-    // Try alternate path
-    try {
-      execSync(
-        'start ms-settings:network',
-        { shell: 'cmd.exe', stdio: 'ignore' }
-      );
-    } catch {
-      // ignore
+    if (fs.existsSync(killerExe)) {
+      if (shell && typeof shell.openPath === 'function') {
+        shell.openPath(killerExe);
+      }
+    } else {
+      if (shell && typeof shell.openExternal === 'function') {
+        shell.openExternal('ms-settings:network');
+      }
     }
+  } catch {
+    // ignore
   }
 }

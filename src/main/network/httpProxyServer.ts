@@ -16,7 +16,6 @@
 
 import http from 'http';
 import net from 'net';
-import url from 'url';
 import { EventEmitter } from 'events';
 import type { ConnectionPool } from './connectionPool';
 import type { NetworkAdapter, DispatchMode, AppRule, PortRule, AutoTurboConfig } from '../../shared/types';
@@ -352,19 +351,27 @@ export class HttpProxyServer extends EventEmitter {
       return;
     }
 
-    // Reconstruct HTTP upgrade request to remote
+    // Reconstruct HTTP upgrade request to remote safely (neutralizing CRLF injection)
     const rawPath = req.url?.startsWith('http')
       ? new URL(req.url).pathname + (new URL(req.url).search || '')
       : (req.url || '/');
-    let requestText = `${req.method || 'GET'} ${rawPath} HTTP/1.1\r\n`;
+    const cleanMethod = (req.method || 'GET').replace(/[\r\n]/g, '');
+    const cleanPath = rawPath.replace(/[\r\n]/g, '');
+    let requestText = `${cleanMethod} ${cleanPath} HTTP/1.1\r\n`;
+
     for (const [key, value] of Object.entries(req.headers)) {
       if (key.toLowerCase() === 'proxy-connection') continue;
+      const cleanKey = key.replace(/[\r\n]/g, '');
+      if (!cleanKey) continue;
+
       if (Array.isArray(value)) {
         for (const v of value) {
-          requestText += `${key}: ${v}\r\n`;
+          const cleanVal = String(v).replace(/[\r\n]/g, '');
+          requestText += `${cleanKey}: ${cleanVal}\r\n`;
         }
       } else if (value !== undefined) {
-        requestText += `${key}: ${value}\r\n`;
+        const cleanVal = String(value).replace(/[\r\n]/g, '');
+        requestText += `${cleanKey}: ${cleanVal}\r\n`;
       }
     }
     requestText += '\r\n';
@@ -416,10 +423,22 @@ export class HttpProxyServer extends EventEmitter {
       return;
     }
 
-    const parsed = url.parse(req.url);
-    const dstHost = parsed.hostname;
-    let dstPort = parseInt(parsed.port ?? '80', 10);
-    if (isNaN(dstPort) || dstPort <= 0 || dstPort > 65535) dstPort = 80;
+    let dstHost: string;
+    let dstPort: number;
+    let outgoingPath: string;
+
+    try {
+      const rawUrl = req.url.startsWith('/') ? `http://${req.headers.host || '127.0.0.1'}${req.url}` : req.url;
+      const parsed = new URL(rawUrl);
+      dstHost = parsed.hostname;
+      dstPort = parseInt(parsed.port || '80', 10);
+      if (isNaN(dstPort) || dstPort <= 0 || dstPort > 65535) dstPort = 80;
+      outgoingPath = `${parsed.pathname}${parsed.search}`;
+    } catch {
+      res.writeHead(400);
+      res.end('Bad Request: Invalid URL');
+      return;
+    }
 
     if (!dstHost) {
       res.writeHead(400);
@@ -452,8 +471,6 @@ export class HttpProxyServer extends EventEmitter {
       res.end('No bonded adapter available');
       return;
     }
-
-    const outgoingPath = parsed.path || '/';
     const sanitizedHeaders: http.OutgoingHttpHeaders = {};
     for (const [key, value] of Object.entries(req.headers)) {
       if (key.toLowerCase() === 'proxy-connection') continue;

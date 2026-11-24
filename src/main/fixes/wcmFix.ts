@@ -13,7 +13,7 @@
  * Requires: app running as Administrator (enforced in electron-builder config)
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 const WCM_KEY = 'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WcmSvc\\GroupPolicy';
 const VALUE_NAME = 'fMinimizeConnections';
@@ -27,9 +27,10 @@ export interface WcmFixResult {
 /** Check the current value of fMinimizeConnections */
 export function getWcmSetting(): number | null {
   try {
-    const out = execSync(
-      `reg query "${WCM_KEY}" /v ${VALUE_NAME}`,
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 }
+    const out = execFileSync(
+      'reg',
+      ['query', WCM_KEY, '/v', VALUE_NAME],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000, windowsHide: true }
     );
     const m = out.match(/REG_DWORD\s+0x(\w+)/i);
     if (m) return parseInt(m[1], 16);
@@ -48,9 +49,10 @@ export function applyWcmFix(): WcmFixResult {
   }
 
   try {
-    execSync(
-      `reg add "${WCM_KEY}" /v ${VALUE_NAME} /t REG_DWORD /d 0 /f`,
-      { stdio: 'ignore', timeout: 5000 }
+    execFileSync(
+      'reg',
+      ['add', WCM_KEY, '/v', VALUE_NAME, '/t', 'REG_DWORD', '/d', '0', '/f'],
+      { stdio: 'ignore', timeout: 5000, windowsHide: true }
     );
     console.log('[WCM] fMinimizeConnections disabled — Wi-Fi will stay connected alongside USB tethering');
     return { success: true, alreadySet: false };
@@ -64,9 +66,10 @@ export function applyWcmFix(): WcmFixResult {
 /** Restore WCM to default (re-enable auto disconnect) — called on uninstall */
 export function revertWcmFix(): void {
   try {
-    execSync(
-      `reg add "${WCM_KEY}" /v ${VALUE_NAME} /t REG_DWORD /d 1 /f`,
-      { stdio: 'ignore', timeout: 5000 }
+    execFileSync(
+      'reg',
+      ['add', WCM_KEY, '/v', VALUE_NAME, '/t', 'REG_DWORD', '/d', '1', '/f'],
+      { stdio: 'ignore', timeout: 5000, windowsHide: true }
     );
     console.log('[WCM] fMinimizeConnections restored to default (1)');
   } catch (e) {

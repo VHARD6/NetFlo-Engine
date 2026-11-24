@@ -16,7 +16,7 @@
  * This fix is reapplied whenever a new adapter connects.
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import type { NetworkAdapter } from '../../shared/types';
 
 const HIGH_METRIC = 9999;
@@ -33,9 +33,10 @@ export function fixUsbTetherMetrics(adapters: NetworkAdapter[]): Map<string, boo
 
   for (const adapter of usbAdapters) {
     try {
-      execSync(
-        `netsh interface ip set interface "${adapter.alias}" metric=${HIGH_METRIC}`,
-        { stdio: 'ignore', timeout: 5000 }
+      execFileSync(
+        'netsh',
+        ['interface', 'ip', 'set', 'interface', adapter.alias, `metric=${HIGH_METRIC}`],
+        { stdio: 'ignore', timeout: 5000, windowsHide: true }
       );
       console.log(`[Metric] Set "${adapter.name}" metric to ${HIGH_METRIC} — prevents route hijacking`);
       results.set(adapter.name, true);
@@ -51,12 +52,13 @@ export function fixUsbTetherMetrics(adapters: NetworkAdapter[]): Map<string, boo
 /** Get current interface metric */
 export function getInterfaceMetric(adapterAlias: string): number | null {
   try {
-    const out = execSync(
-      `netsh interface ip show interface "${adapterAlias}"`,
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 }
+    const out = execFileSync(
+      'netsh',
+      ['interface', 'ip', 'show', 'interface', adapterAlias],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000, windowsHide: true }
     );
     const m = out.match(/Metric\s*:\s*(\d+)/i);
-    if (m) return parseInt(m[1]);
+    if (m) return parseInt(m[1], 10);
   } catch {
     // ignore
   }

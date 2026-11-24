@@ -225,6 +225,13 @@ export class Socks5Server extends EventEmitter {
       const portBuf = await readBytes(client, 2);
       const dstPort = (portBuf[0] << 8) | portBuf[1];
 
+      if (!dstHost || isNaN(dstPort) || dstPort <= 0 || dstPort > 65535) {
+        this.emit('log', `[SOCKS5] Invalid destination address or port: ${dstHost}:${dstPort}`);
+        sendSocksReply(client, REP_ADDR_NOT_SUPP);
+        client.destroy();
+        return;
+      }
+
       // ── Step 4: Detect process, choose adapter and connect ─
       const clientPort = client.remotePort ?? 0;
       client.once('close', () => {
