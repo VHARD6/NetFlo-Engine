@@ -47,8 +47,8 @@ export function enableSystemProxy(socksPort = 1080, httpPort = 8080): boolean {
     const proxyServer = `http=127.0.0.1:${httpPort};https=127.0.0.1:${httpPort};socks=127.0.0.1:${socksPort}`;
     execSync(`reg add "${REG_KEY}" /v ProxyEnable /t REG_DWORD /d 1 /f`, { stdio: 'ignore' });
     execSync(`reg add "${REG_KEY}" /v ProxyServer /t REG_SZ /d "${proxyServer}" /f`, { stdio: 'ignore' });
-    // Bypass local loopback addresses
-    execSync(`reg add "${REG_KEY}" /v ProxyOverride /t REG_SZ /d "<local>;localhost;127.0.0.1" /f`, { stdio: 'ignore' });
+    // Bypass all local loopback addresses and IPC services
+    execSync(`reg add "${REG_KEY}" /v ProxyOverride /t REG_SZ /d "<local>;localhost;127.0.0.1;127.*;::1" /f`, { stdio: 'ignore' });
     notifySystemSettingsChanged();
     console.log(`[SystemProxy] System proxy enabled on 127.0.0.1 (HTTP: ${httpPort}, SOCKS: ${socksPort})`);
     return true;

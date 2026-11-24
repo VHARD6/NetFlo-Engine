@@ -1,3 +1,6 @@
+// Scale libuv threadpool to 64 threads to eliminate DNS lookup bottlenecks
+process.env.UV_THREADPOOL_SIZE = '64';
+
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';

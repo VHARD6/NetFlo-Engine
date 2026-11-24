@@ -64,6 +64,63 @@ function initWinsock(): void {
   _initialized = true;
 }
 
+// ─── DNS Cache & NAT64 Normalization ────────────────────────
+interface DnsCacheEntry {
+  ip: string;
+  expires: number;
+}
+const dnsCache = new Map<string, DnsCacheEntry>();
+const DNS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+export function normalizeHost(host: string): string {
+  if (!host) return '';
+  let h = host.trim();
+  if (h.startsWith('[') && h.endsWith(']')) {
+    h = h.slice(1, -1);
+  }
+  // RFC 6052 NAT64 Well-Known Prefix 64:ff9b::/96
+  const match = h.match(/^64:ff9b::([0-9a-fA-F]{1,4}):([0-9a-fA-F]{1,4})$/i);
+  if (match) {
+    const w1 = parseInt(match[1], 16);
+    const w2 = parseInt(match[2], 16);
+    return `${(w1 >> 8) & 0xff}.${w1 & 0xff}.${(w2 >> 8) & 0xff}.${w2 & 0xff}`;
+  }
+  const dottedMatch = h.match(/^64:ff9b::(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
+  if (dottedMatch) {
+    return dottedMatch[1];
+  }
+  return h;
+}
+
+export function isLoopback(host: string): boolean {
+  if (!host) return false;
+  const h = normalizeHost(host).toLowerCase();
+  return h === '127.0.0.1' || h === 'localhost' || h === '::1' || h.startsWith('127.');
+}
+
+export async function resolveHostToIpv4(host: string): Promise<string> {
+  const normalized = normalizeHost(host);
+  if (net.isIPv4(normalized)) return normalized;
+
+  const cached = dnsCache.get(normalized);
+  if (cached && cached.expires > Date.now()) {
+    return cached.ip;
+  }
+
+  const lookup = await dns.lookup(normalized, { family: 4 });
+  const ip = normalizeHost(lookup.address);
+  dnsCache.set(normalized, {
+    ip,
+    expires: Date.now() + DNS_CACHE_TTL_MS,
+  });
+  return ip;
+}
+
+/** Clear the in-memory DNS cache */
+export function clearDnsCache(): void {
+  dnsCache.clear();
+}
+
 /**
  * Creates an outgoing TCP connection strictly bound to a specific Windows
  * network adapter by its interface index (ifIndex).
@@ -85,23 +142,34 @@ export async function createBoundConnection(
     });
   }
 
-  initWinsock();
-
-  // 1. Resolve host to IPv4 address if needed
-  let targetIp = dstHost;
-  if (!net.isIPv4(targetIp)) {
-    const lookup = await dns.lookup(dstHost, { family: 4 });
-    targetIp = lookup.address;
+  // 1. Loopback bypass — never bind local IPC/RPC to an external physical adapter!
+  if (isLoopback(dstHost)) {
+    return new Promise((resolve, reject) => {
+      const s = net.createConnection(dstPort, dstHost, () => resolve(s));
+      s.once('error', reject);
+    });
   }
 
-  // 2. Allocate native Winsock TCP socket
+  initWinsock();
+
+  // 2. Resolve host to IPv4 address with caching and NAT64 translation
+  const targetIp = await resolveHostToIpv4(dstHost);
+
+  if (isLoopback(targetIp)) {
+    return new Promise((resolve, reject) => {
+      const s = net.createConnection(dstPort, targetIp, () => resolve(s));
+      s.once('error', reject);
+    });
+  }
+
+  // 3. Allocate native Winsock TCP socket
   const sock = socketFn(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (!sock || sock === 0xffffffff || sock === -1) {
     const err = WSAGetLastError ? WSAGetLastError() : -1;
     throw new Error(`[WindowsBinding] socket() failed: WSA error ${err}`);
   }
 
-  // 3. Set IP_UNICAST_IF on the socket
+  // 4. Set IP_UNICAST_IF on the socket
   // Windows quirk: ifIndex must be in network byte order (big-endian)
   const ifBuf = Buffer.allocUnsafe(4);
   ifBuf.writeUInt32BE(ifIndex, 0);
@@ -116,7 +184,7 @@ export async function createBoundConnection(
     );
   }
 
-  // 4. Perform asynchronous connect
+  // 5. Perform asynchronous connect
   const target = {
     sin_family: AF_INET,
     sin_port: htons(dstPort),
@@ -138,7 +206,7 @@ export async function createBoundConnection(
       }
 
       try {
-        // 5. Wrap the connected native socket in Node.js net.Socket
+        // 6. Wrap the connected native socket in Node.js net.Socket
         const TCP = (process as any).binding('tcp_wrap').TCP;
         const handle = new TCP(1); // 1 = TCP socket type in libuv
         handle.open(sock);

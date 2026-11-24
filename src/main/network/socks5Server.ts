@@ -26,6 +26,7 @@ import type { NetworkAdapter, DispatchMode, AppRule, PortRule, AutoTurboConfig }
 import { chooseAdapter, isMeetingTraffic } from './dispatcher';
 import { appDetector } from './appDetector';
 import { isPrivateSubnet } from './subnetCheck';
+import { normalizeHost } from './windowsBinding';
 
 // ─── SOCKS5 Constants ────────────────────────────────────────
 const SOCKS5_VERSION    = 0x05;
@@ -219,6 +220,8 @@ export class Socks5Server extends EventEmitter {
         return;
       }
 
+      dstHost = normalizeHost(dstHost);
+
       const portBuf = await readBytes(client, 2);
       const dstPort = (portBuf[0] << 8) | portBuf[1];
 
@@ -228,7 +231,11 @@ export class Socks5Server extends EventEmitter {
         appDetector.releasePort(clientPort);
       });
 
-      const processName = await appDetector.getProcessForPort(clientPort, this.port);
+      let processName: string | null = null;
+      if (this.appRules && this.appRules.some(r => r.enabled)) {
+        processName = await appDetector.getProcessForPort(clientPort, this.port);
+      }
+
       const flow = {
         proto: 'tcp' as const,
         dstHost,
@@ -258,6 +265,7 @@ export class Socks5Server extends EventEmitter {
         return;
       }
 
+      client.pause();
       let remote: net.Socket;
       try {
         remote = await this.pool.createConnection(adapter, dstHost, dstPort);
@@ -265,10 +273,13 @@ export class Socks5Server extends EventEmitter {
         this.emit('log', `[SOCKS5] createConnection failed: ${e}`);
         const msg = String(e);
         const rep = msg.includes('refused') ? REP_CONN_REFUSED : REP_HOST_UNREACH;
+        client.resume();
         sendSocksReply(client, rep);
         client.destroy();
         return;
       }
+
+      client.resume();
 
       // ── Step 5: Send success reply ───────────────────────
       if (client.destroyed || !client.writable) {

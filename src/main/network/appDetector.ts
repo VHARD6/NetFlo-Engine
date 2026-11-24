@@ -48,6 +48,17 @@ export class AppDetector {
       return cached.name;
     }
 
+    const timeoutPromise = new Promise<string | null>(resolve => {
+      setTimeout(() => resolve(null), 60);
+    });
+
+    return Promise.race([
+      this.detectPortInternal(port, socksPort),
+      timeoutPromise,
+    ]);
+  }
+
+  private async detectPortInternal(port: number, socksPort: number): Promise<string | null> {
     try {
       // 2. Query netstat (coalescing simultaneous requests to prevent high CPU)
       const stdout = await this.getNetstatOutput();
@@ -78,7 +89,7 @@ export class AppDetector {
       let processName = await this.getProcessNameByPid(foundPid);
       if (processName) {
         processName = processName.toLowerCase();
-        this.portCache.set(clientPort, {
+        this.portCache.set(port, {
           name: processName,
           expires: Date.now() + CACHE_TTL_MS,
         });

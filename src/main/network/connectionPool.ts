@@ -85,11 +85,12 @@ export class ConnectionPool {
     const socket = await createBoundConnection(adapter.ifIndex, dstHost, dstPort);
     pool.activeConnections++;
 
-    // Track bytes transferred through this adapter
+    // Track bytes transferred through this adapter without prematurely consuming chunks
     socket.on('data', (chunk) => {
       pool.rxBytes += chunk.length;
       this.onBytesTransferred?.(adapter.ifIndex, adapter.name, chunk.length);
     });
+    socket.pause();
 
     const origWrite = socket.write.bind(socket);
     const self = this;

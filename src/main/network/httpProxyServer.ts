@@ -95,6 +95,9 @@ export class HttpProxyServer extends EventEmitter {
       this.server.on('connect', (req, clientSocket, head) =>
         this.handleConnect(req, clientSocket as net.Socket, head)
       );
+      this.server.on('upgrade', (req, clientSocket, head) =>
+        this.handleUpgrade(req, clientSocket as net.Socket, head)
+      );
 
       this.server.once('error', reject);
       this.server.listen(this.port, this.bindHost, () => {
@@ -214,11 +217,13 @@ export class HttpProxyServer extends EventEmitter {
       return;
     }
 
+    clientSocket.pause();
     let remoteSocket: net.Socket;
     try {
       remoteSocket = await this.pool.createConnection(adapter, dstHost, dstPort);
     } catch (e) {
       this.emit('log', `[HTTP Proxy] Connection to ${dstHost}:${dstPort} failed: ${e}`);
+      clientSocket.resume();
       clientSocket.write('HTTP/1.1 504 Gateway Timeout\r\n\r\n');
       clientSocket.destroy();
       return;
@@ -244,7 +249,139 @@ export class HttpProxyServer extends EventEmitter {
       this.emit('log', `[HTTP Proxy] CONNECT ${dstHost}:${dstPort} → via ${adapter.name}`);
     }
 
+    clientSocket.resume();
     // Bidirectional pipe
+    clientSocket.pipe(remoteSocket);
+    remoteSocket.pipe(clientSocket);
+
+    clientSocket.on('error', () => remoteSocket.destroy());
+    remoteSocket.on('error', () => clientSocket.destroy());
+    clientSocket.on('close', () => remoteSocket.destroy());
+    remoteSocket.on('close', () => clientSocket.destroy());
+  }
+
+  /**
+   * Handle plain HTTP WebSocket upgrade tunnels (e.g. Speedtest ws:// upload)
+   */
+  private async handleUpgrade(
+    req: http.IncomingMessage,
+    clientSocket: net.Socket,
+    head: Buffer
+  ): Promise<void> {
+    const clientIp = clientSocket.remoteAddress ?? '';
+
+    // Subnet security check
+    if (this.allowedSubnetsOnly && !isPrivateSubnet(clientIp)) {
+      this.emit('log', `[HTTP Proxy] 🛑 Rejected unauthorized external upgrade from ${clientIp}`);
+      clientSocket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+      clientSocket.destroy();
+      return;
+    }
+
+    this.trackClient(clientIp);
+
+    let dstHost = '';
+    let dstPort = 80;
+
+    if (req.url && req.url.startsWith('http')) {
+      try {
+        const u = new URL(req.url);
+        dstHost = u.hostname;
+        dstPort = parseInt(u.port || (u.protocol === 'https:' ? '443' : '80'), 10);
+      } catch {}
+    }
+
+    if (!dstHost && req.headers.host) {
+      const parts = req.headers.host.split(':');
+      dstHost = parts[0] || '';
+      dstPort = parseInt(parts[1] || '80', 10);
+    }
+
+    if (isNaN(dstPort) || dstPort <= 0 || dstPort > 65535) {
+      dstPort = 80;
+    }
+
+    if (!dstHost) {
+      clientSocket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+      clientSocket.destroy();
+      return;
+    }
+
+    const flow = {
+      proto: 'tcp' as const,
+      dstHost,
+      dstPort,
+    };
+    const isMeeting = isMeetingTraffic(flow);
+
+    let adapter: NetworkAdapter;
+    try {
+      adapter = chooseAdapter(
+        flow,
+        this.mode,
+        this.adapters,
+        {
+          meetingShieldActive: this.meetingShieldActive,
+          adapterPings: this.adapterPings,
+          appRules: this.appRules,
+          portRules: this.portRules,
+          autoTurbo: this.autoTurbo,
+        }
+      );
+    } catch (e) {
+      this.emit('log', `[HTTP Proxy] No adapter available for Upgrade ${dstHost}:${dstPort}: ${e}`);
+      clientSocket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+      clientSocket.destroy();
+      return;
+    }
+
+    clientSocket.pause();
+    let remoteSocket: net.Socket;
+    try {
+      remoteSocket = await this.pool.createConnection(adapter, dstHost, dstPort);
+    } catch (e) {
+      this.emit('log', `[HTTP Proxy] Upgrade connection to ${dstHost}:${dstPort} failed: ${e}`);
+      clientSocket.resume();
+      clientSocket.write('HTTP/1.1 504 Gateway Timeout\r\n\r\n');
+      clientSocket.destroy();
+      return;
+    }
+
+    if (clientSocket.destroyed || !clientSocket.writable) {
+      remoteSocket.destroy();
+      return;
+    }
+
+    // Reconstruct HTTP upgrade request to remote
+    const rawPath = req.url?.startsWith('http')
+      ? new URL(req.url).pathname + (new URL(req.url).search || '')
+      : (req.url || '/');
+    let requestText = `${req.method || 'GET'} ${rawPath} HTTP/1.1\r\n`;
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (key.toLowerCase() === 'proxy-connection') continue;
+      if (Array.isArray(value)) {
+        for (const v of value) {
+          requestText += `${key}: ${v}\r\n`;
+        }
+      } else if (value !== undefined) {
+        requestText += `${key}: ${value}\r\n`;
+      }
+    }
+    requestText += '\r\n';
+
+    remoteSocket.write(requestText);
+    if (head && head.length > 0) {
+      remoteSocket.write(head);
+    }
+
+    if (this.meetingShieldActive && isMeeting) {
+      this.emit('meeting-protected');
+      this.emit('log', `[Meeting Shield] 🟢 Protected HTTP Upgrade ${dstHost}:${dstPort} via ${adapter.name}`);
+    } else {
+      this.emit('log', `[HTTP Proxy] Upgrade ${dstHost}:${dstPort} → via ${adapter.name}`);
+    }
+
+    clientSocket.resume();
     clientSocket.pipe(remoteSocket);
     remoteSocket.pipe(clientSocket);
 
