@@ -17,6 +17,21 @@ let isStoppingEngine = false;
 
 const isDev = !app.isPackaged;
 
+// ─── Emergency Cleanup Hooks ─────────────────────────────────
+function emergencyCleanup(): void {
+  try {
+    disableSystemProxy();
+  } catch {}
+}
+process.on('exit', emergencyCleanup);
+process.on('SIGINT', () => { emergencyCleanup(); process.exit(0); });
+process.on('SIGTERM', () => { emergencyCleanup(); process.exit(0); });
+process.on('uncaughtException', (err) => {
+  console.error('[NetFlo] Uncaught exception:', err);
+  emergencyCleanup();
+  process.exit(1);
+});
+
 // ─── Single instance lock ────────────────────────────────────
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -33,6 +48,9 @@ app.on('second-instance', () => {
 
 // ─── App lifecycle ───────────────────────────────────────────
 app.whenReady().then(async () => {
+  // Always ensure clean proxy state on launch
+  disableSystemProxy();
+
   createWindow();
   createTray();
 
@@ -56,9 +74,8 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  if (!engine || engine.getState().status === 'stopped') {
-    app.quit();
-  }
+  disableSystemProxy();
+  app.quit();
 });
 
 app.on('before-quit', (e) => {
@@ -130,16 +147,20 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
-  // Hide to tray on close if engine is running, quit if stopped
+  // Stop bonding, revert system proxy, and quit when window is closed
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
-      if (!engine || engine.getState().status === 'stopped') {
-        isQuitting = true;
-        app.quit();
-        return;
-      }
+      isQuitting = true;
       e.preventDefault();
-      mainWindow?.hide();
+      const finalizeQuit = () => {
+        disableSystemProxy();
+        app.quit();
+      };
+      if (engine && engine.getState().status !== 'stopped') {
+        engine.stop().finally(finalizeQuit);
+      } else {
+        finalizeQuit();
+      }
     }
   });
 
@@ -188,7 +209,15 @@ function createTray(): void {
       label: 'Quit NetFlo',
       click: () => {
         isQuitting = true;
-        app.quit();
+        const finalizeQuit = () => {
+          disableSystemProxy();
+          app.quit();
+        };
+        if (engine && engine.getState().status !== 'stopped') {
+          engine.stop().finally(finalizeQuit);
+        } else {
+          finalizeQuit();
+        }
       },
     },
   ]);

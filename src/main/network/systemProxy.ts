@@ -63,8 +63,9 @@ export function disableSystemProxy(): boolean {
   if (process.platform !== 'win32') return false;
   try {
     execSync(`reg add "${REG_KEY}" /v ProxyEnable /t REG_DWORD /d 0 /f`, { stdio: 'ignore' });
+    execSync(`reg add "${REG_KEY}" /v ProxyServer /t REG_SZ /d "" /f`, { stdio: 'ignore' });
     notifySystemSettingsChanged();
-    console.log('[SystemProxy] System proxy disabled');
+    console.log('[SystemProxy] System proxy disabled and cleared');
     return true;
   } catch (e) {
     console.error('[SystemProxy] Failed to disable system proxy:', e);

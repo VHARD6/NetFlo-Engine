@@ -233,14 +233,6 @@ export class NetFloEngine extends EventEmitter {
     // 2. Discover adapters
     this.refreshAdapters();
 
-    // 3. Fix USB tethering metrics
-    const usbFixResults = fixUsbTetherMetrics(this.state.adapters);
-    for (const [name, ok] of usbFixResults) {
-      this.log(ok
-        ? `[Engine] USB metric fixed for ${name}`
-        : `[Engine] USB metric fix failed for ${name}`);
-    }
-
     // 4. Detect Killer suite
     const killer = detectKillerSuite();
     this.state.killerWarning = killer.detected;
@@ -301,10 +293,6 @@ export class NetFloEngine extends EventEmitter {
 
       this.state.status = 'running';
 
-      // Automatically activate Windows system proxy so browser & app tasks immediately use bonded interfaces
-      this.state.systemProxyActive = true;
-      enableSystemProxy(this.state.socksPort, this.state.lanGateway.httpPort);
-
       this.pushState();
       this.log('[Engine] NetFlo running');
 
@@ -323,10 +311,9 @@ export class NetFloEngine extends EventEmitter {
     this.pushState();
     this.log('[Engine] Stopping NetFlo...');
 
-    // Restore Windows system proxy
-    if (this.state.systemProxyActive) {
-      disableSystemProxy();
-    }
+    // Always unconditionally revert and clear Windows system proxy whenever bonding stops
+    disableSystemProxy();
+    this.state.systemProxyActive = false;
 
     // Stop Wintun if running
     if (this.wintun) {
