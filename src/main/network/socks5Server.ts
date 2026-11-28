@@ -63,7 +63,7 @@ export class Socks5Server extends EventEmitter {
     highLatencyThresholdMs: 150,
     secondaryAdapterIndex: null,
   };
-  private activeClients = new Set<string>();
+  private clientSocketCounts = new Map<string, number>();
   private sockets = new Set<net.Socket>();
 
   constructor(pool: ConnectionPool, port = 1080, bindHost = '127.0.0.1', allowedSubnetsOnly = true) {
@@ -94,7 +94,7 @@ export class Socks5Server extends EventEmitter {
   }
 
   getActiveClientCount(): number {
-    return this.activeClients.size;
+    return this.clientSocketCounts.size;
   }
 
   async start(port = this.port, bindHost = this.bindHost): Promise<void> {
@@ -124,7 +124,7 @@ export class Socks5Server extends EventEmitter {
       if (!this.server) return resolve();
       const serverRef = this.server;
       this.server = null;
-      this.activeClients.clear();
+      this.clientSocketCounts.clear();
 
       try {
         if (typeof (serverRef as any).closeAllConnections === 'function') {
@@ -164,12 +164,7 @@ export class Socks5Server extends EventEmitter {
       return;
     }
 
-    if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
-      if (!this.activeClients.has(clientIp)) {
-        this.activeClients.add(clientIp);
-        this.emit('client-connected', clientIp, this.activeClients.size);
-      }
-    }
+    this.trackClient(client, clientIp);
 
     try {
       // ── Step 1: Greeting ────────────────────────────────
@@ -325,6 +320,24 @@ export class Socks5Server extends EventEmitter {
       this.emit('log', `[SOCKS5] Unexpected error in handleClient: ${e}`);
       client.destroy();
     }
+  }
+
+  public trackClient(client: net.Socket, clientIp: string): void {
+    if (!clientIp || clientIp === '127.0.0.1' || clientIp === '::1') return;
+    const current = this.clientSocketCounts.get(clientIp) || 0;
+    this.clientSocketCounts.set(clientIp, current + 1);
+    if (current === 0) {
+      this.emit('client-connected', clientIp, this.clientSocketCounts.size);
+    }
+    client.once('close', () => {
+      const remaining = (this.clientSocketCounts.get(clientIp) || 1) - 1;
+      if (remaining <= 0) {
+        this.clientSocketCounts.delete(clientIp);
+        this.emit('client-disconnected', clientIp, this.clientSocketCounts.size);
+      } else {
+        this.clientSocketCounts.set(clientIp, remaining);
+      }
+    });
   }
 }
 

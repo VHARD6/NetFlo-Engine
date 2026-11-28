@@ -71,6 +71,10 @@ export function ThroughputChart({ adapters, stats }: ThroughputChartProps) {
                   <stop offset="0%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.28} />
                   <stop offset="100%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.0} />
                 </linearGradient>
+                <linearGradient id={`grad_tx_${adapter.ifIndex}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.12} />
+                  <stop offset="100%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.0} />
+                </linearGradient>
               </React.Fragment>
             ))}
           </defs>
@@ -110,17 +114,29 @@ export function ThroughputChart({ adapters, stats }: ThroughputChartProps) {
           />
 
           {activeAdapters.map((adapter, i) => (
-            <Area
-              key={`${adapter.ifIndex}_rx`}
-              type="monotone"
-              dataKey={`${adapter.name}_rx`}
-              name={`${adapter.name}_rx`}
-              stroke={COLORS[i % COLORS.length]}
-              strokeWidth={1.5}
-              fill={`url(#grad_rx_${adapter.ifIndex})`}
-              dot={false}
-              isAnimationActive={false}
-            />
+            <React.Fragment key={adapter.ifIndex}>
+              <Area
+                type="monotone"
+                dataKey={`${adapter.name}_rx`}
+                name={`${adapter.name}_rx`}
+                stroke={COLORS[i % COLORS.length]}
+                strokeWidth={1.5}
+                fill={`url(#grad_rx_${adapter.ifIndex})`}
+                dot={false}
+                isAnimationActive={false}
+              />
+              <Area
+                type="monotone"
+                dataKey={`${adapter.name}_tx`}
+                name={`${adapter.name}_tx`}
+                stroke={COLORS[i % COLORS.length]}
+                strokeWidth={1.2}
+                strokeDasharray="3 3"
+                fill={`url(#grad_tx_${adapter.ifIndex})`}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </React.Fragment>
           ))}
         </AreaChart>
       </ResponsiveContainer>

@@ -146,7 +146,7 @@ function dispatchByMode(
 
   switch (mode) {
     case 'gaming':
-      return dispatchGaming(flow, active);
+      return dispatchGaming(flow, active, options?.adapterPings);
 
     case 'failover':
       return active[0]; // primary first
@@ -156,7 +156,6 @@ function dispatchByMode(
       return roundRobin(active);
   }
 }
-
 
 function dispatchMeeting(
   active: NetworkAdapter[],
@@ -172,12 +171,22 @@ function dispatchMeeting(
   return sorted[0];
 }
 
-function dispatchGaming(flow: FlowKey, active: NetworkAdapter[]): NetworkAdapter {
+function dispatchGaming(
+  flow: FlowKey,
+  active: NetworkAdapter[],
+  pings?: Map<number, number>
+): NetworkAdapter {
   // UDP game traffic → pin to single lowest-latency adapter
   // This prevents jitter caused by out-of-order packets across adapters
   if (flow.proto === 'udp' && GAMING_UDP_PORTS.has(flow.dstPort)) {
     // Sort by latency (tracked externally via ping; fall back to speed) without mutating active array
-    return [...active].sort((a, b) => (a.speedMbps > b.speedMbps ? -1 : 1))[0];
+    const sorted = [...active].sort((a, b) => {
+      const pingA = (pings?.get(a.ifIndex) ?? 0) || 9999;
+      const pingB = (pings?.get(b.ifIndex) ?? 0) || 9999;
+      if (pingA !== pingB) return pingA - pingB;
+      return b.speedMbps - a.speedMbps;
+    });
+    return sorted[0];
   }
 
   // HTTP/HTTPS downloads → round-robin across all adapters for bonded throughput

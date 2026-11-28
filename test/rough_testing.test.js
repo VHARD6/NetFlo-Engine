@@ -108,7 +108,7 @@ describe('Rough Test 3: AppDetector Extreme Inputs & Concurrency', () => {
 
 describe('Rough Test 4: Bridge Server Hostile Payloads & Error Hardening', () => {
   let bridge;
-  const PORT = 19188;
+  const PORT = 19288;
   const mockEngine = {
     getState: () => ({ status: 'running', mode: 'round-robin', adapters: [], stats: [], socksPort: 1080, lanGateway: { httpPort: 8080 } }),
     setMode: () => {},
@@ -242,7 +242,7 @@ describe('Rough Test 6: HTTP Proxy IPv6 CONNECT Parsing', () => {
 
 describe('Rough Test 7: SOCKS5 Protocol Fuzzing and Rejection', () => {
   let socksServer;
-  const SOCKS_PORT = 19181;
+  const SOCKS_PORT = 19281;
 
   before(async () => {
     const mockPool = {

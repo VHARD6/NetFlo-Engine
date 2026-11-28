@@ -64,3 +64,20 @@ export function getInterfaceMetric(adapterAlias: string): number | null {
   }
   return null;
 }
+
+/** Restore USB tethering adapters to automatic metric when NetFlo stops */
+export function revertUsbTetherMetrics(adapters: NetworkAdapter[]): void {
+  const usbAdapters = getUsbTetherAdapters(adapters);
+  for (const adapter of usbAdapters) {
+    try {
+      execFileSync(
+        'netsh',
+        ['interface', 'ip', 'set', 'interface', adapter.alias, 'metric=automatic'],
+        { stdio: 'ignore', timeout: 5000, windowsHide: true }
+      );
+      console.log(`[Metric] Reverted "${adapter.name}" metric to automatic`);
+    } catch (e) {
+      console.warn(`[Metric] Failed to revert metric for "${adapter.name}":`, e);
+    }
+  }
+}

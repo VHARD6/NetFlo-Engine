@@ -12,7 +12,7 @@
 import koffi from 'koffi';
 import path from 'path';
 import fs from 'fs';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { EventEmitter } from 'events';
 
 export class WintunAdapter extends EventEmitter {
@@ -109,10 +109,11 @@ export class WintunAdapter extends EventEmitter {
 
     // Configure IP address on virtual interface
     try {
-      execSync(`netsh interface ip set address name="${adapterName}" source=static addr=${ip} mask=${netmask}`, {
-        stdio: 'ignore',
-        timeout: 5000,
-      });
+      execFileSync(
+        'netsh',
+        ['interface', 'ip', 'set', 'address', `name=${adapterName}`, 'source=static', `addr=${ip}`, `mask=${netmask}`],
+        { stdio: 'ignore', timeout: 5000, windowsHide: true }
+      );
       console.log(`[Wintun] Configured ${adapterName} with IP ${ip}/${netmask}`);
     } catch (e) {
       console.warn(`[Wintun] IP configuration warning:`, e);

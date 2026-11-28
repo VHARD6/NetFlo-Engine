@@ -21,7 +21,7 @@ import { HttpProxyServer } from './network/httpProxyServer';
 import { BridgeServer } from './network/bridgeServer';
 import { pingAllAdapters } from './network/pinger';
 import { applyWcmFix } from './fixes/wcmFix';
-import { fixUsbTetherMetrics } from './fixes/metricFix';
+import { fixUsbTetherMetrics, revertUsbTetherMetrics } from './fixes/metricFix';
 import { detectKillerSuite } from './fixes/killerDetect';
 import { tetherAssistant } from './fixes/tetherAssistant';
 import { resetRoundRobin } from './network/dispatcher';
@@ -158,6 +158,10 @@ export class NetFloEngine extends EventEmitter {
       this.state.lanGateway.activeClients = this.socksServer.getActiveClientCount() + this.httpProxyServer.getActiveClientCount();
       this.pushState();
     });
+    this.socksServer.on('client-disconnected', () => {
+      this.state.lanGateway.activeClients = this.socksServer.getActiveClientCount() + this.httpProxyServer.getActiveClientCount();
+      this.pushState();
+    });
 
     this.httpProxyServer.on('log', (msg: string) => this.log(msg));
     this.httpProxyServer.on('meeting-protected', () => {
@@ -165,6 +169,10 @@ export class NetFloEngine extends EventEmitter {
       this.pushState();
     });
     this.httpProxyServer.on('client-connected', () => {
+      this.state.lanGateway.activeClients = this.socksServer.getActiveClientCount() + this.httpProxyServer.getActiveClientCount();
+      this.pushState();
+    });
+    this.httpProxyServer.on('client-disconnected', () => {
       this.state.lanGateway.activeClients = this.socksServer.getActiveClientCount() + this.httpProxyServer.getActiveClientCount();
       this.pushState();
     });
@@ -331,6 +339,12 @@ export class NetFloEngine extends EventEmitter {
     await this.httpProxyServer.stop();
     await this.bridgeServer.stop();
     this.pool.stopStatsCollection();
+
+    // Revert USB tethering metrics to automatic so network settings are clean
+    revertUsbTetherMetrics(this.state.adapters);
+
+    // Flush any pending debounced quota saves to disk
+    this.quotaManager.saveToDisk();
 
     this.state.status = 'stopped';
     this.pushState();
@@ -597,13 +611,25 @@ export class NetFloEngine extends EventEmitter {
 
   // ─── IPC Push Helpers ─────────────────────────────────────
 
+  private sendToRenderer(channel: string, ...args: any[]): void {
+    try {
+      if (
+        this.mainWindow &&
+        !this.mainWindow.isDestroyed() &&
+        !this.mainWindow.webContents.isDestroyed()
+      ) {
+        this.mainWindow.webContents.send(channel, ...args);
+      }
+    } catch {
+      // Ignore destroyed webContents / reload race condition
+    }
+  }
+
   private pushState(): void {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
-    this.mainWindow.webContents.send(IPC.STATE_UPDATE, this.state);
+    this.sendToRenderer(IPC.STATE_UPDATE, this.state);
   }
 
   private pushStats(): void {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.state.stats = this.pool.getStats();
     this.state.bridge.connectedClients = this.bridgeServer.getClientCount();
     this.state.lanGateway.activeClients =
@@ -660,12 +686,11 @@ export class NetFloEngine extends EventEmitter {
       }
     }
 
-    this.mainWindow.webContents.send(IPC.STATS_UPDATE, this.state.stats);
+    this.sendToRenderer(IPC.STATS_UPDATE, this.state.stats);
   }
 
   private log(msg: string): void {
     console.log(msg);
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
-    this.mainWindow.webContents.send(IPC.LOG, msg);
+    this.sendToRenderer(IPC.LOG, msg);
   }
 }

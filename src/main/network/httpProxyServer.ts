@@ -43,7 +43,7 @@ export class HttpProxyServer extends EventEmitter {
     secondaryAdapterIndex: null,
   };
 
-  private activeClients = new Set<string>();
+  private clientSocketCounts = new Map<string, number>();
   private sockets = new Set<net.Socket>();
 
   constructor(pool: ConnectionPool, port = 8080, bindHost = '127.0.0.1', allowedSubnetsOnly = true) {
@@ -74,7 +74,7 @@ export class HttpProxyServer extends EventEmitter {
   }
 
   getActiveClientCount(): number {
-    return this.activeClients.size;
+    return this.clientSocketCounts.size;
   }
 
   async start(port = this.port, bindHost = this.bindHost): Promise<void> {
@@ -111,7 +111,7 @@ export class HttpProxyServer extends EventEmitter {
       if (!this.server) return resolve();
       const serverRef = this.server;
       this.server = null;
-      this.activeClients.clear();
+      this.clientSocketCounts.clear();
 
       try {
         if (typeof (serverRef as any).closeAllConnections === 'function') {
@@ -159,7 +159,7 @@ export class HttpProxyServer extends EventEmitter {
       return;
     }
 
-    this.trackClient(clientIp);
+    this.trackClient(clientSocket, clientIp);
 
     // Parse destination host and port (handles IPv4, hostnames, and bracketed IPv6 literals like [::1]:443)
     let dstHost = '';
@@ -279,7 +279,7 @@ export class HttpProxyServer extends EventEmitter {
       return;
     }
 
-    this.trackClient(clientIp);
+    this.trackClient(clientSocket, clientIp);
 
     let dstHost = '';
     let dstPort = 80;
@@ -415,7 +415,7 @@ export class HttpProxyServer extends EventEmitter {
       return;
     }
 
-    this.trackClient(clientIp);
+    this.trackClient(req.socket, clientIp);
 
     if (!req.url) {
       res.writeHead(400);
@@ -535,12 +535,22 @@ export class HttpProxyServer extends EventEmitter {
     }
   }
 
-  private trackClient(clientIp: string): void {
+  private trackClient(clientSocket: net.Socket, clientIp: string): void {
     if (!clientIp || clientIp === '127.0.0.1' || clientIp === '::1') return;
-    if (!this.activeClients.has(clientIp)) {
-      this.activeClients.add(clientIp);
-      this.emit('client-connected', clientIp, this.activeClients.size);
+    const current = this.clientSocketCounts.get(clientIp) || 0;
+    this.clientSocketCounts.set(clientIp, current + 1);
+    if (current === 0) {
+      this.emit('client-connected', clientIp, this.clientSocketCounts.size);
       this.emit('log', `[LAN Gateway] 📱 Mobile/LAN device connected from ${clientIp}`);
     }
+    clientSocket.once('close', () => {
+      const remaining = (this.clientSocketCounts.get(clientIp) || 1) - 1;
+      if (remaining <= 0) {
+        this.clientSocketCounts.delete(clientIp);
+        this.emit('client-disconnected', clientIp, this.clientSocketCounts.size);
+      } else {
+        this.clientSocketCounts.set(clientIp, remaining);
+      }
+    });
   }
 }

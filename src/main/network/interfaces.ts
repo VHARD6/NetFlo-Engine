@@ -22,6 +22,7 @@ function parseNetshInterfaces(): Map<string, NetshInterface> {
       encoding: 'utf8',
       timeout: 5000,
       stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
     });
 
     for (const line of out.split(/\r?\n/)) {
@@ -52,6 +53,7 @@ function parseGateways(): Map<number, string> {
       encoding: 'utf8',
       timeout: 5000,
       stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
     });
     for (const line of out.split(/\r?\n/)) {
       const tokens = line.trim().split(/\s+/);
@@ -86,6 +88,7 @@ export function detectKillerServices(): string[] {
       encoding: 'utf8',
       timeout: 8000,
       stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
     });
     for (const svc of killerServiceNames) {
       if (out.includes(svc)) found.push(svc);
@@ -120,14 +123,22 @@ function classifyAdapter(name: string, internal: boolean, description = ''): Ada
   return 'unknown';
 }
 
+let _cachedDescriptions: Map<string, string> = new Map();
+let _lastDescriptionsTime = 0;
+const DESCRIPTIONS_CACHE_TTL_MS = 60_000;
+
 /** Get hardware descriptions for interfaces via PowerShell on Windows */
 function getAdapterDescriptions(): Map<string, string> {
+  const now = Date.now();
+  if (_cachedDescriptions.size > 0 && now - _lastDescriptionsTime < DESCRIPTIONS_CACHE_TTL_MS) {
+    return _cachedDescriptions;
+  }
   const map = new Map<string, string>();
   if (process.platform !== 'win32') return map;
   try {
     const out = execSync(
       'powershell -NoProfile -NonInteractive -Command "Get-NetAdapter | Select-Object ifIndex, Name, InterfaceDescription | ConvertTo-Json"',
-      { encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }
+      { encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }
     );
     const parsed = JSON.parse(out);
     const list = Array.isArray(parsed) ? parsed : [parsed];
@@ -137,10 +148,12 @@ function getAdapterDescriptions(): Map<string, string> {
         if (item.ifIndex) map.set(String(item.ifIndex), String(item.InterfaceDescription));
       }
     }
+    _cachedDescriptions = map;
+    _lastDescriptionsTime = now;
   } catch {
     // Graceful fallback if PowerShell is restricted
   }
-  return map;
+  return map.size > 0 ? map : _cachedDescriptions;
 }
 
 /** Get all network adapters on this machine */
@@ -216,6 +229,7 @@ export function getAdapterSpeeds(): Map<string, number> {
       encoding: 'utf8',
       timeout: 5000,
       stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
     });
     // Admin State  State       Type             Interface Name
     // -------------------------------------------------------------------------
